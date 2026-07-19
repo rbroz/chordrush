@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- SEO -->
+<title>ChordRush — Major Chord Time Trial | Free Piano MIDI Practice</title>
+<meta name="description" content="Race through all 12 major and minor chords on your MIDI keyboard and beat your best time. A free online piano chord trainer for building speed, accuracy, and muscle memory. Works in Chrome.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://chordrush.app/">
+
+<!-- Social link previews -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://chordrush.app/">
+<meta property="og:title" content="ChordRush — Chord Time Trial">
+<meta property="og:description" content="Connect your MIDI keyboard and race through the major and minor chords. Beat your best time. Free.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ChordRush — Chord Time Trial">
+<meta name="twitter:description" content="Connect your MIDI keyboard and race through the major and minor chords. Beat your best time. Free.">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "ChordRush",
+  "url": "https://chordrush.app/",
+  "applicationCategory": "EducationApplication",
+  "operatingSystem": "Web browser (Chrome, Edge)",
+  "description": "A free online piano chord trainer. Connect a MIDI keyboard and race through the major and minor chords against the clock to build speed and muscle memory.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <nav class="tabs">
+      <a href="/" class="tab active">compete</a>
+      <a href="/learn" class="tab">learn</a>
+    </nav>
+  </header>
+
+  <main class="main">
+    <div class="conn">
+      <span class="dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">requesting MIDI…</span>
+      <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
+      <button id="reconnectBtn">reconnect</button>
+    </div>
+    <div class="err" id="errBox" style="display:none;"></div>
+
+    <div class="filterbar" id="filterbar">
+      <button class="filter" data-type="major">majors</button>
+      <button class="filter" data-type="minor">minors</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
+
+      <div id="playWrap" style="display:none;">
+        <div class="prompt-label" id="promptLabel">play</div>
+        <div class="chord-name" id="chordName">—</div>
+        <div class="held" id="heldLine"></div>
+      </div>
+
+      <div id="doneWrap" style="display:none;">
+        <div class="prompt-label">finished</div>
+        <div class="done-total" id="doneTotal">—</div>
+        <div id="pbWrap"></div>
+        <div class="splits" id="splits"></div>
+      </div>
+    </div>
+
+    <button class="start-btn" id="startBtn">start</button>
+
+    <div class="hud" id="hud" style="display:none;">
+      <span class="item"><b id="hTime">0.00</b><i>s</i></span>
+      <span class="item"><b id="hProg">1 / 12</b></span>
+      <span class="item"><i>best</i> <b id="hBest">—</b></span>
+    </div>
+
+    <div class="board" id="boardPanel">
+      <div class="board-title" id="boardTitle">Top 5</div>
+      <ol class="board-list" id="boardList"></ol>
+      <div class="board-empty" id="boardEmpty">no times yet</div>
+    </div>
+  </main>
+
+<script>
+/* ---------- Chords ---------- */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const ROOTS = [
+  {name:"C",pc:0},{name:"C♯",pc:1},{name:"D",pc:2},{name:"E♭",pc:3},
+  {name:"E",pc:4},{name:"F",pc:5},{name:"F♯",pc:6},{name:"G",pc:7},
+  {name:"A♭",pc:8},{name:"A",pc:9},{name:"B♭",pc:10},{name:"B",pc:11},
+];
+const CHORD_TYPES = {
+  major: { label:"majors", suffix:" Major", ivals:[0,4,7] },
+  minor: { label:"minors", suffix:" minor", ivals:[0,3,7] },
+};
+const enabled = { major:true, minor:false };   // which chord types are in the pool
+
+const chordFor = (r,type)=>({ name:r.name+CHORD_TYPES[type].suffix, type, pcs:CHORD_TYPES[type].ivals.map(i=>(r.pc+i)%12) });
+const enabledTypes = ()=>Object.keys(CHORD_TYPES).filter(t=>enabled[t]);
+function buildOrder(){
+  const list=[];
+  for(const type of enabledTypes()) for(const r of ROOTS) list.push(chordFor(r,type));
+  return shuffled(list);
+}
+function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* ---------- Mode (drives which leaderboard is active) ---------- */
+const modeKey   = ()=>enabledTypes().join("+");                                   // "major" | "minor" | "major+minor"
+const modeLabel = ()=>enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");    // "majors + minors"
+const topKey    = ()=>"chordrushTop5:"+modeKey();
+const MAX_TOP=5;
+
+/* ---------- State ---------- */
+let midiAccess=null, currentInput=null;
+const heldNotes=new Map();
+let order=[], idx=0, phase="idle";      // idle | ready | running | done
+let startTime=0, completions=[], rafId=null;
+const sessionRuns={};                   // modeKey -> last finished run this session (for restoring the view)
+
+/* ---------- DOM ---------- */
+const $=id=>document.getElementById(id);
+const statusDot=$("statusDot"), statusText=$("statusText"), deviceSelect=$("deviceSelect"), errBox=$("errBox");
+const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$("doneWrap");
+const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
+const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest");
+const filterbar=$("filterbar");
+
+/* ---------- MIDI ---------- */
+async function initMidi(){
+  errBox.style.display="none";
+  if(!navigator.requestMIDIAccess){ setStatus(false,"Web MIDI not supported — use Chrome/Edge"); return; }
+  try {
+    midiAccess=await navigator.requestMIDIAccess({sysex:false});
+    midiAccess.onstatechange=refreshDevices;
+    refreshDevices();
+  } catch(e){ setStatus(false,"MIDI access denied"); showErr("MIDI blocked. Allow MIDI for this page in Chrome and reload."); }
+}
+function refreshDevices(){
+  const inputs=midiAccess?[...midiAccess.inputs.values()]:[];
+  deviceSelect.innerHTML="";
+  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard detected"); currentInput=null; return; }
+  inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
+  deviceSelect.style.display = inputs.length>1 ? "" : "none";   // only show the picker when there's a choice
+  const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
+  selectInput(keep?currentInput.id:inputs[0].id);
+}
+function selectInput(id){
+  if(currentInput) currentInput.onmidimessage=null;
+  currentInput=[...midiAccess.inputs.values()].find(i=>i.id===id)||null;
+  if(currentInput){ currentInput.onmidimessage=onMidi; deviceSelect.value=id; setStatus(true, currentInput.name||"MIDI input"); }
+}
+function setStatus(on,t){ statusDot.classList.toggle("on",on); statusText.textContent=t; }
+function showErr(m){ errBox.textContent=m; errBox.style.display="block"; }
+
+function onMidi(ev){
+  const [status,d1,d2]=ev.data, cmd=status&0xF0;
+  if(cmd===0x90&&d2>0) heldNotes.set(d1,d2);
+  else if(cmd===0x80||(cmd===0x90&&d2===0)) heldNotes.delete(d1);
+  else return;                       // ignore active-sensing (254), CC, pedal, etc.
+  renderHeld();
+  if(phase==="ready"||phase==="running") checkMatch();
+}
+function renderHeld(){
+  const notes=[...heldNotes.keys()].sort((a,b)=>a-b);
+  heldLine.textContent = notes.length ? notes.map(n=>NOTE_NAMES[n%12]).join("  ") : "";
+}
+
+/* ---------- Matching ---------- */
+function checkMatch(){
+  const notes=[...heldNotes.keys()];
+  if(!notes.length) return;
+  const held=new Set(notes.map(n=>n%12));
+  const tgt=new Set(order[idx].pcs);
+  if(held.size!==tgt.size) return;
+  for(const p of tgt) if(!held.has(p)) return;
+  advance();
+}
+
+/* ---------- Filter bar ---------- */
+function toggleType(type){
+  if(phase==="ready"||phase==="running") return;         // don't change the pool mid-run
+  if(enabled[type] && enabledTypes().length===1) return; // always keep at least one on
+  enabled[type]=!enabled[type];
+  showMode();
+}
+function updateModeUI(){
+  document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
+  $("boardTitle").textContent = "Top 5 · " + modeLabel();
+  hBest.textContent = formatBest();
+  renderBoard();
+}
+// Reflect the selected filter in the stage: restore this mode's finished run if
+// one exists this session, otherwise show a fresh "press start".
+function showMode(){
+  updateModeUI();
+  const snap=sessionRuns[modeKey()];
+  if(snap){
+    idleMsg.style.display="none"; playWrap.style.display="none";
+    doneWrap.innerHTML=snap.doneHTML; doneWrap.style.display="block";
+    hud.style.display="flex"; hTime.classList.remove("dim");
+    hTime.textContent=snap.timeText; hProg.textContent=snap.progText;
+    phase="done";
+  } else {
+    doneWrap.style.display="none"; playWrap.style.display="none";
+    idleMsg.style.display="block";
+    hud.style.display="none";
+    phase="idle";
+  }
+}
+
+/* ---------- Game flow ---------- */
+function start(){
+  if(!currentInput){ showErr("no MIDI device connected — click reconnect"); return; }
+  errBox.style.display="none";
+  order=buildOrder();
+  idx=0; completions=[]; startTime=0; phase="ready";
+  doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
+  filterbar.classList.add("locked");
+  hud.style.display="flex";
+  hTime.textContent="0.00"; hTime.classList.add("dim");
+  hProg.textContent="1 / "+order.length;
+  hBest.textContent=formatBest();
+  promptLabel.textContent="play to start";
+  showChord();
+}
+function showChord(){ chordName.textContent=order[idx].name; }
+
+function advance(){
+  const now=performance.now();
+  flash();
+  if(phase==="ready"){                 // first chord = the go-signal
+    startTime=now; completions=[now]; phase="running";
+    hTime.classList.remove("dim");
+    promptLabel.textContent="play";
+    idx=1; hProg.textContent=(idx+1)+" / "+order.length; showChord();
+    tick();
+    return;
+  }
+  completions.push(now);
+  idx++;
+  if(idx>=order.length){ finish(); return; }
+  hProg.textContent=(idx+1)+" / "+order.length;
+  showChord();
+}
+
+function tick(){
+  hTime.textContent=((performance.now()-startTime)/1000).toFixed(2);
+  rafId=requestAnimationFrame(tick);
+}
+
+function finish(){
+  cancelAnimationFrame(rafId);
+  phase="done";
+  filterbar.classList.remove("locked");
+  const total=(completions[completions.length-1]-startTime)/1000;
+  hTime.textContent=total.toFixed(2);
+  playWrap.style.display="none"; doneWrap.style.display="block";
+  $("doneTotal").textContent=total.toFixed(2)+"s";
+
+  // insert into the mode's top-5 board
+  const top=loadTop();
+  const entry={t:total, d:new Date().toISOString()};
+  top.push(entry);
+  top.sort((a,b)=>a.t-b.t);
+  const trimmed=top.slice(0,MAX_TOP);
+  const rank=trimmed.indexOf(entry);   // 0-based; -1 if it didn't crack the top 5
+  saveTop(trimmed);
+
+  if(rank===0)      $("pbWrap").innerHTML='<div class="pb-badge">★ new best time</div>';
+  else if(rank>0)   $("pbWrap").innerHTML=`<div class="pb-badge">new top 5 — #${rank+1}</div>`;
+  else              $("pbWrap").innerHTML=`<div class="note-line">not a top-5 time — best is ${trimmed[0].t.toFixed(2)}s</div>`;
+
+  hBest.textContent=formatBest();
+  renderSplits();
+  renderBoard(rank);
+
+  // remember this run so switching back to this mode shows it again this session
+  sessionRuns[modeKey()]={ doneHTML:doneWrap.innerHTML, timeText:hTime.textContent, progText:hProg.textContent };
+}
+
+function renderSplits(){
+  const durs=[];
+  for(let k=1;k<completions.length;k++) durs.push(completions[k]-completions[k-1]);
+  const min=Math.min(...durs), max=Math.max(...durs);
+  const sp=$("splits"); sp.innerHTML="";
+  const trig=document.createElement("div");
+  trig.className="split-row";
+  trig.innerHTML=`<span class="nm">${order[0].name}</span><span class="tm">start</span>`;
+  sp.appendChild(trig);
+  for(let k=1;k<order.length;k++){
+    const d=(completions[k]-completions[k-1])/1000;
+    const row=document.createElement("div");
+    row.className="split-row"+(completions[k]-completions[k-1]===min?" fast":(completions[k]-completions[k-1]===max?" slow":""));
+    row.innerHTML=`<span class="nm">${order[k].name}</span><span class="tm">${d.toFixed(2)}s</span>`;
+    sp.appendChild(row);
+  }
+}
+function flash(){ stage.classList.remove("flash-good"); void stage.offsetWidth; stage.classList.add("flash-good"); }
+
+/* ---------- Top-5 board (saved locally, per mode) ---------- */
+function loadTop(){ try{ const a=JSON.parse(localStorage.getItem(topKey())); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function saveTop(a){ localStorage.setItem(topKey(), JSON.stringify(a)); }
+function migrateLegacy(){
+  const mk="chordrushTop5:major";
+  if(localStorage.getItem(mk)) return;
+  const oldBoard=localStorage.getItem("chordrushTop5V1");     // previous single major-only board
+  if(oldBoard){ localStorage.setItem(mk, oldBoard); return; }
+  const oldBest=parseFloat(localStorage.getItem("majorRunBestV1")||"");
+  if(!isNaN(oldBest)) localStorage.setItem(mk, JSON.stringify([{t:oldBest, d:new Date().toISOString()}]));
+}
+function formatBest(){ const t=loadTop(); return t.length ? t[0].t.toFixed(2)+"s" : "—"; }
+function renderBoard(justSetRank){
+  const t=loadTop(), list=$("boardList"), empty=$("boardEmpty");
+  list.innerHTML="";
+  if(!t.length){ empty.style.display="block"; return; }
+  empty.style.display="none";
+  t.forEach((e,i)=>{
+    const li=document.createElement("li");
+    li.className=(i===0?"top1 ":"")+(i===justSetRank?"justset":"");
+    let date="";
+    try { date=new Date(e.d).toLocaleDateString(undefined,{month:"short",day:"numeric"}); } catch(err){}
+    li.innerHTML=`<span class="rank">${i+1}</span><span class="time">${e.t.toFixed(2)}s</span><span class="date">${date}</span>`;
+    list.appendChild(li);
+  });
+}
+
+/* ---------- Wire up ---------- */
+$("reconnectBtn").onclick=initMidi;
+deviceSelect.onchange=e=>selectInput(e.target.value);
+$("startBtn").onclick=start;
+document.querySelectorAll(".filter").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
+document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&phase!=="running"){ e.preventDefault(); start(); } });
+
+migrateLegacy();
+updateModeUI();       // sets filter states, board title, best, and renders the board
+initMidi();
+</script>
+</body>
+</html>
