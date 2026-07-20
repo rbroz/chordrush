@@ -222,10 +222,17 @@ function checkMatch(){
 
 /* ---------- Filter bar ---------- */
 function toggleType(type){
-  if(phase==="ready"||phase==="running") return;
-  if(enabled[type] && enabledTypes().length===1) return;
+  if(phase==="running") return;                          // locked only once the clock is running
+  if(enabled[type] && enabledTypes().length===1) return; // keep at least one on
   enabled[type]=!enabled[type];
-  showStage();
+  if(phase==="ready"){                                    // reconfigure the not-yet-started run
+    updateModeUI();
+    order=buildOrder(); idx=0;
+    hProg.textContent="1 / "+order.length;
+    showChord();
+  } else {
+    showStage();
+  }
 }
 async function updateModeUI(){
   document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
@@ -253,7 +260,7 @@ function showStage(){
 }
 
 /* ---------- Game flow ---------- */
-function syncStartBtn(){ $("startBtn").textContent = (phase==="ready"||phase==="running") ? "restart" : "start"; }
+function syncStartBtn(){ $("startBtn").textContent = phase==="running" ? "restart" : "start"; }
 function start(){
   if(!currentInput){ showErr("no MIDI device connected — click reconnect"); return; }
   errBox.style.display="none";
@@ -261,7 +268,7 @@ function start(){
   order=buildOrder();
   idx=0; completions=[]; startTime=0; phase="ready";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
-  filterbar.classList.add("locked");
+  filterbar.classList.remove("locked");   // stays changeable until the clock starts
   hud.style.display="flex";
   hTime.textContent="0.00"; hTime.classList.add("dim");
   hProg.textContent="1 / "+order.length;
@@ -277,6 +284,8 @@ function advance(){
   flash();
   if(phase==="ready"){                 // first chord = the go-signal
     startTime=now; completions=[now]; phase="running";
+    filterbar.classList.add("locked");  // lock the pool now that the clock is running
+    syncStartBtn();                     // now running → button becomes "restart"
     hTime.classList.remove("dim");
     promptLabel.textContent="play";
     idx=1; hProg.textContent=(idx+1)+" / "+order.length; showChord();
