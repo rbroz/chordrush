@@ -505,6 +505,9 @@ document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&p
 $('authClose').addEventListener('click', closeModal);
 modal.addEventListener('click', e => { if(e.target===modal) closeModal(); });
 document.addEventListener('keydown', e => { if(e.key==='Escape' && !modal.hidden) closeModal(); });
+modal.addEventListener('keydown', e => {   // Enter submits whichever form is showing
+  if(e.key==='Enter'){ e.preventDefault(); (loginForm.hidden ? signupForm : loginForm).requestSubmit(); }
+});
 signupForm.addEventListener('submit', handleSignup);
 loginForm.addEventListener('submit', handleLogin);
 
