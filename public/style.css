@@ -104,11 +104,13 @@ body {
 .soon .title { font-size:28px; font-weight:700; letter-spacing:-0.02em; }
 .soon .sub { color:var(--muted); font-size:15px; }
 
-/* ---------- Account button + auth modal ---------- */
-.nav-account { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent;
-               border:1px solid var(--line); border-radius:8px; padding:7px 14px; cursor:pointer;
-               transition:color .12s, border-color .12s; }
-.nav-account:hover { color:var(--text); border-color:var(--accent); }
+/* ---------- Account area + auth modal ---------- */
+.nav-account { display:flex; align-items:center; gap:12px; }
+.nav-btn { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent;
+           border:1px solid var(--line); border-radius:8px; padding:7px 14px; cursor:pointer;
+           transition:color .12s, border-color .12s; }
+.nav-btn:hover { color:var(--text); border-color:var(--accent); }
+.nav-user { font-family:var(--mono); font-size:14px; color:var(--accent); }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(20,22,28,.45); display:flex;
                  align-items:center; justify-content:center; padding:20px; z-index:50; }
@@ -131,6 +133,9 @@ body {
 .modal-msg { margin-top:14px; font-size:13px; text-align:center; min-height:18px; line-height:1.4; }
 .modal-msg.error { color:var(--bad); }
 .modal-msg.ok { color:var(--good); }
+.modal-switch { margin-top:16px; text-align:center; font-size:13px; color:var(--muted); }
+.modal-switch a { color:var(--accent); cursor:pointer; text-decoration:none; }
+.modal-switch a:hover { text-decoration:underline; }
 
 @media (max-width:560px){
   .nav { padding:18px 18px; }

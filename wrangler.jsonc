@@ -1,10 +1,19 @@
 {
-  // Must match your existing Worker's name so deploys UPDATE it in place
+  // Must match the existing Worker name so deploys update it in place
   // (and keep the chordrush.app custom domain attached).
   "name": "chordrush",
   "compatibility_date": "2026-07-18",
-  // Serve the static site from ./public — no server-side code needed.
-  "assets": {
-    "directory": "./public"
+
+  // Server-side code entry point.
+  "main": "src/index.js",
+
+  // Static site. `binding` lets the Worker serve these via env.ASSETS.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Public config (safe to commit). The SECRET key is NOT here —
+  // it's set separately: `.dev.vars` for local dev, `wrangler secret put` for prod.
+  "vars": {
+    "SUPABASE_URL": "https://pkrvnrgqtuvbtusdncok.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE"
   }
 }

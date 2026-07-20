@@ -80,3 +80,26 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ============================================================
+-- 5. LOGIN-BY-USERNAME resolver.
+--    Supabase logs in by EMAIL. To allow username login without
+--    ever exposing emails to the browser, this maps username→email.
+--    It's LOCKED to the service_role (our server) — the public/anon
+--    client is explicitly denied, so no one can harvest emails.
+-- ============================================================
+create or replace function public.email_for_username(uname text)
+returns text
+language sql
+security definer
+set search_path = ''
+as $$
+  select u.email
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  where lower(p.username) = lower(uname)
+  limit 1;
+$$;
+
+revoke execute on function public.email_for_username(text) from anon, authenticated, public;
+grant  execute on function public.email_for_username(text) to service_role;
