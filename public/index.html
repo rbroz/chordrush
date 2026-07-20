@@ -115,7 +115,15 @@
     </div>
   </div>
 
-<script>
+<!-- One module: game + auth + score storage all share scope. -->
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Publishable/anon key: safe in frontend + public repo. RLS protects the data.
+const SUPABASE_URL = 'https://pkrvnrgqtuvbtusdncok.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
 /* ---------- Chords ---------- */
 const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const ROOTS = [
@@ -140,8 +148,7 @@ function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ cons
 
 /* ---------- Mode (drives which leaderboard is active) ---------- */
 const modeKey   = ()=>enabledTypes().join("+");                                   // "major" | "minor" | "major+minor"
-const modeLabel = ()=>enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");    // "majors + minors"
-const topKey    = ()=>"chordrushTop5:"+modeKey();
+const modeLabel = ()=>enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
 const MAX_TOP=5;
 
 /* ---------- State ---------- */
@@ -150,6 +157,7 @@ const heldNotes=new Map();
 let order=[], idx=0, phase="idle";      // idle | ready | running | done
 let startTime=0, completions=[], rafId=null;
 const sessionRuns={};                   // modeKey -> last finished run this session (for restoring the view)
+let currentSession=null;                // set by renderAuth(); drives DB-vs-localStorage
 
 /* ---------- DOM ---------- */
 const $=id=>document.getElementById(id);
@@ -158,6 +166,8 @@ const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$
 const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest");
 const filterbar=$("filterbar");
+const modal=$("authModal"), msg=$("authMsg"), loginForm=$("loginForm"), signupForm=$("signupForm");
+const setMsg=(t,kind='')=>{ msg.textContent=t; msg.className='modal-msg'+(kind?' '+kind:''); };
 
 /* ---------- MIDI ---------- */
 async function initMidi(){
@@ -174,7 +184,7 @@ function refreshDevices(){
   deviceSelect.innerHTML="";
   if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard detected"); currentInput=null; return; }
   inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
-  deviceSelect.style.display = inputs.length>1 ? "" : "none";   // only show the picker when there's a choice
+  deviceSelect.style.display = inputs.length>1 ? "" : "none";
   const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
   selectInput(keep?currentInput.id:inputs[0].id);
 }
@@ -190,7 +200,7 @@ function onMidi(ev){
   const [status,d1,d2]=ev.data, cmd=status&0xF0;
   if(cmd===0x90&&d2>0) heldNotes.set(d1,d2);
   else if(cmd===0x80||(cmd===0x90&&d2===0)) heldNotes.delete(d1);
-  else return;                       // ignore active-sensing (254), CC, pedal, etc.
+  else return;
   renderHeld();
   if(phase==="ready"||phase==="running") checkMatch();
 }
@@ -212,20 +222,19 @@ function checkMatch(){
 
 /* ---------- Filter bar ---------- */
 function toggleType(type){
-  if(phase==="ready"||phase==="running") return;         // don't change the pool mid-run
-  if(enabled[type] && enabledTypes().length===1) return; // always keep at least one on
+  if(phase==="ready"||phase==="running") return;
+  if(enabled[type] && enabledTypes().length===1) return;
   enabled[type]=!enabled[type];
-  showMode();
+  showStage();
 }
-function updateModeUI(){
+async function updateModeUI(){
   document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   $("boardTitle").textContent = "Top 5 · " + modeLabel();
-  hBest.textContent = formatBest();
-  renderBoard();
+  await refreshBoard();
 }
 // Reflect the selected filter in the stage: restore this mode's finished run if
 // one exists this session, otherwise show a fresh "press start".
-function showMode(){
+function showStage(){
   updateModeUI();
   const snap=sessionRuns[modeKey()];
   if(snap){
@@ -253,7 +262,7 @@ function start(){
   hud.style.display="flex";
   hTime.textContent="0.00"; hTime.classList.add("dim");
   hProg.textContent="1 / "+order.length;
-  hBest.textContent=formatBest();
+  refreshBest();
   promptLabel.textContent="play to start";
   showChord();
 }
@@ -282,33 +291,28 @@ function tick(){
   rafId=requestAnimationFrame(tick);
 }
 
-function finish(){
+async function finish(){
   cancelAnimationFrame(rafId);
   phase="done";
   filterbar.classList.remove("locked");
   const total=(completions[completions.length-1]-startTime)/1000;
+  const timeMs=Math.round(total*1000);
   hTime.textContent=total.toFixed(2);
   playWrap.style.display="none"; doneWrap.style.display="block";
   $("doneTotal").textContent=total.toFixed(2)+"s";
 
-  // insert into the mode's top-5 board
-  const top=loadTop();
-  const entry={t:total, d:new Date().toISOString()};
-  top.push(entry);
-  top.sort((a,b)=>a.t-b.t);
-  const trimmed=top.slice(0,MAX_TOP);
-  const rank=trimmed.indexOf(entry);   // 0-based; -1 if it didn't crack the top 5
-  saveTop(trimmed);
+  // save the run (DB if logged in, else localStorage), then read back the fresh top 5
+  await addScore(modeKey(), timeMs, order.length);
+  const top = await getTop(modeKey());
+  const rank = top.findIndex(e => e.t.toFixed(2) === total.toFixed(2));
 
   if(rank===0)      $("pbWrap").innerHTML='<div class="pb-badge">★ new best time</div>';
   else if(rank>0)   $("pbWrap").innerHTML=`<div class="pb-badge">new top 5 — #${rank+1}</div>`;
-  else              $("pbWrap").innerHTML=`<div class="note-line">not a top-5 time — best is ${trimmed[0].t.toFixed(2)}s</div>`;
+  else              $("pbWrap").innerHTML=`<div class="note-line">not a top-5 time — best is ${top.length?top[0].t.toFixed(2):'?'}s</div>`;
 
-  hBest.textContent=formatBest();
   renderSplits();
-  renderBoard(rank);
+  await refreshBoard(rank, top);
 
-  // remember this run so switching back to this mode shows it again this session
   sessionRuns[modeKey()]={ doneHTML:doneWrap.innerHTML, timeText:hTime.textContent, progText:hProg.textContent };
 }
 
@@ -331,20 +335,68 @@ function renderSplits(){
 }
 function flash(){ stage.classList.remove("flash-good"); void stage.offsetWidth; stage.classList.add("flash-good"); }
 
-/* ---------- Top-5 board (saved locally, per mode) ---------- */
-function loadTop(){ try{ const a=JSON.parse(localStorage.getItem(topKey())); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function saveTop(a){ localStorage.setItem(topKey(), JSON.stringify(a)); }
-function migrateLegacy(){
-  const mk="chordrushTop5:major";
+/* ---------- Score storage: DB when logged in, localStorage when guest ---------- */
+async function getTop(mode){
+  if(currentSession){
+    const { data, error } = await supabase
+      .from('scores').select('time_ms, created_at')
+      .eq('mode', mode).order('time_ms', { ascending:true }).limit(MAX_TOP);
+    if(error){ console.error('getTop', error); return []; }
+    return data.map(r => ({ t: r.time_ms/1000, d: r.created_at }));
+  }
+  return localTop(mode);
+}
+async function addScore(mode, timeMs, chordCount){
+  if(currentSession){
+    const { error } = await supabase.from('scores')
+      .insert({ user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount });
+    if(error) console.error('addScore', error);
+  } else {
+    localAddScore(mode, timeMs);
+  }
+}
+function localKey(mode){ return 'chordrushTop5:'+mode; }
+function localTop(mode){ try{ const a=JSON.parse(localStorage.getItem(localKey(mode))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function localAddScore(mode, timeMs){
+  const arr=localTop(mode);
+  arr.push({ t:timeMs/1000, d:new Date().toISOString() });
+  arr.sort((a,b)=>a.t-b.t);
+  localStorage.setItem(localKey(mode), JSON.stringify(arr.slice(0,MAX_TOP)));
+}
+function migrateLegacy(){   // old local keys → current local key (guest history only)
+  const mk=localKey('major');
   if(localStorage.getItem(mk)) return;
-  const oldBoard=localStorage.getItem("chordrushTop5V1");     // previous single major-only board
+  const oldBoard=localStorage.getItem("chordrushTop5V1");
   if(oldBoard){ localStorage.setItem(mk, oldBoard); return; }
   const oldBest=parseFloat(localStorage.getItem("majorRunBestV1")||"");
   if(!isNaN(oldBest)) localStorage.setItem(mk, JSON.stringify([{t:oldBest, d:new Date().toISOString()}]));
 }
-function formatBest(){ const t=loadTop(); return t.length ? t[0].t.toFixed(2)+"s" : "—"; }
-function renderBoard(justSetRank){
-  const t=loadTop(), list=$("boardList"), empty=$("boardEmpty");
+// On login, move any guest (localStorage) times into the account once, then clear them.
+async function migrateLocalToAccount(){
+  if(!currentSession) return;
+  const uid=currentSession.user.id;
+  const modes=['major','minor','major+minor'];
+  const rows=[];
+  for(const mode of modes){
+    for(const e of localTop(mode)){
+      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count: mode==='major+minor'?24:12 });
+    }
+  }
+  if(rows.length){
+    const { error } = await supabase.from('scores').insert(rows);
+    if(!error) modes.forEach(m => localStorage.removeItem(localKey(m)));
+  }
+}
+
+/* ---------- Board rendering ---------- */
+async function refreshBest(){
+  const t = await getTop(modeKey());
+  hBest.textContent = t.length ? t[0].t.toFixed(2)+'s' : '—';
+}
+async function refreshBoard(justSetRank, prefetched){
+  const t = prefetched || await getTop(modeKey());
+  hBest.textContent = t.length ? t[0].t.toFixed(2)+'s' : '—';
+  const list=$("boardList"), empty=$("boardEmpty");
   list.innerHTML="";
   if(!t.length){ empty.style.display="block"; return; }
   empty.style.display="none";
@@ -358,127 +410,108 @@ function renderBoard(justSetRank){
   });
 }
 
+/* ---------- Auth: modal + signup + login + nav state ---------- */
+function setAuthMode(mode){
+  const login = mode === 'login';
+  $('authTitle').textContent = login ? 'Log in' : 'Create account';
+  loginForm.hidden = !login;
+  signupForm.hidden = login;
+  $('authSwitch').innerHTML = login
+    ? `Need an account? <a id="toSignup">Sign up</a>`
+    : `Have an account? <a id="toLogin">Log in</a>`;
+  $(login ? 'toSignup' : 'toLogin').onclick = () => { setMsg(''); setAuthMode(login ? 'signup' : 'login'); };
+  setMsg('');
+}
+function openModal(mode='login'){ setAuthMode(mode); modal.hidden=false; $(mode==='login'?'liId':'suUsername').focus(); }
+function closeModal(){ modal.hidden=true; setMsg(''); }
+
+async function handleSignup(e){
+  e.preventDefault();
+  const username=$('suUsername').value.trim(), email=$('suEmail').value.trim();
+  const password=$('suPassword').value, confirm=$('suConfirm').value;
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(username)) return setMsg('Username: 3–20 letters, numbers, or _', 'error');
+  if(!email)               return setMsg('Enter your email', 'error');
+  if(password.length < 6)  return setMsg('Password must be at least 6 characters', 'error');
+  if(password !== confirm) return setMsg('Passwords do not match', 'error');
+
+  const submit=$('signupSubmit'); submit.disabled=true; setMsg('Creating account…');
+  const pattern=username.replace(/[\\%_]/g, '\\$&');
+  const { data: existing, error: checkErr } =
+    await supabase.from('profiles').select('id').ilike('username', pattern).limit(1);
+  if(checkErr){ submit.disabled=false; return setMsg('Could not check username: '+checkErr.message, 'error'); }
+  if(existing && existing.length){ submit.disabled=false; return setMsg('That username is taken', 'error'); }
+
+  const { error } = await supabase.auth.signUp({
+    email, password, options:{ data:{ username }, emailRedirectTo: window.location.origin }
+  });
+  submit.disabled=false;
+  if(error) return setMsg(error.message, 'error');
+  setMsg('Account created! Check '+email+' to verify, then log in.', 'ok');
+  signupForm.reset();
+}
+
+async function handleLogin(e){
+  e.preventDefault();
+  const identifier=$('liId').value.trim(), password=$('liPassword').value;
+  if(!identifier || !password) return setMsg('Enter your login and password', 'error');
+  const submit=$('loginSubmit'); submit.disabled=true; setMsg('Logging in…');
+  try {
+    const resp = await fetch('/api/login', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ identifier, password })
+    });
+    const data = await resp.json();
+    if(!resp.ok){ submit.disabled=false; return setMsg(data.error || 'Login failed', 'error'); }
+    const { error } = await supabase.auth.setSession({ access_token:data.access_token, refresh_token:data.refresh_token });
+    submit.disabled=false;
+    if(error) return setMsg(error.message, 'error');
+    loginForm.reset();
+    closeModal();
+    await renderAuth();             // sets currentSession + nav
+    await migrateLocalToAccount();  // move guest times into the account (once)
+    await updateModeUI();           // board now reflects the account
+  } catch(err){
+    submit.disabled=false;
+    setMsg('Login failed — try again', 'error');
+  }
+}
+
+async function renderAuth(){
+  const { data: { session } } = await supabase.auth.getSession();
+  currentSession = session;
+  const nav = $('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<span class="nav-user">@${name}</span><button class="nav-btn" id="logoutBtn">log out</button>`;
+    $('logoutBtn').onclick = async () => {
+      await supabase.auth.signOut();
+      currentSession = null;
+      await renderAuth();
+      await updateModeUI();   // board back to guest (localStorage)
+    };
+  } else {
+    nav.innerHTML = `<button class="nav-btn" id="authBtn">log in</button>`;
+    $('authBtn').onclick = () => openModal('login');
+  }
+}
+
 /* ---------- Wire up ---------- */
 $("reconnectBtn").onclick=initMidi;
 deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
-document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&phase!=="running"){ e.preventDefault(); start(); } });
+document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&phase!=="running"&&modal.hidden){ e.preventDefault(); start(); } });
 
+$('authClose').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if(e.target===modal) closeModal(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape' && !modal.hidden) closeModal(); });
+signupForm.addEventListener('submit', handleSignup);
+loginForm.addEventListener('submit', handleLogin);
+
+/* ---------- Init ---------- */
 migrateLegacy();
-updateModeUI();       // sets filter states, board title, best, and renders the board
+renderAuth().then(() => updateModeUI());
 initMidi();
-</script>
-
-<!-- Auth (talks to Supabase). Separate module so it has its own scope. -->
-<script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-// Publishable/anon key: safe in frontend + public repo. RLS protects the data.
-const SUPABASE_URL = 'https://pkrvnrgqtuvbtusdncok.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE';
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-
-const el = id => document.getElementById(id);
-const modal = el('authModal'), msg = el('authMsg');
-const loginForm = el('loginForm'), signupForm = el('signupForm');
-const setMsg = (t, kind='') => { msg.textContent = t; msg.className = 'modal-msg' + (kind ? ' ' + kind : ''); };
-
-// ---- modal open/close + login/signup toggle ----
-function showMode(mode){
-  const login = mode === 'login';
-  el('authTitle').textContent = login ? 'Log in' : 'Create account';
-  loginForm.hidden = !login;
-  signupForm.hidden = login;
-  el('authSwitch').innerHTML = login
-    ? `Need an account? <a id="toSignup">Sign up</a>`
-    : `Have an account? <a id="toLogin">Log in</a>`;
-  el(login ? 'toSignup' : 'toLogin').onclick = () => { setMsg(''); showMode(login ? 'signup' : 'login'); };
-  setMsg('');
-}
-function openModal(mode='login'){ showMode(mode); modal.hidden = false; el(mode==='login'?'liId':'suUsername').focus(); }
-function closeModal(){ modal.hidden = true; setMsg(''); }
-el('authClose').addEventListener('click', closeModal);
-modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
-
-// ---- SIGNUP ----
-signupForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const username = el('suUsername').value.trim();
-  const email    = el('suEmail').value.trim();
-  const password = el('suPassword').value;
-  const confirm  = el('suConfirm').value;
-
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return setMsg('Username: 3–20 letters, numbers, or _', 'error');
-  if (!email)               return setMsg('Enter your email', 'error');
-  if (password.length < 6)  return setMsg('Password must be at least 6 characters', 'error');
-  if (password !== confirm) return setMsg('Passwords do not match', 'error');
-
-  const submit = el('signupSubmit'); submit.disabled = true; setMsg('Creating account…');
-
-  const pattern = username.replace(/[\\%_]/g, '\\$&');
-  const { data: existing, error: checkErr } =
-    await supabase.from('profiles').select('id').ilike('username', pattern).limit(1);
-  if (checkErr) { submit.disabled = false; return setMsg('Could not check username: ' + checkErr.message, 'error'); }
-  if (existing && existing.length) { submit.disabled = false; return setMsg('That username is taken', 'error'); }
-
-  const { error } = await supabase.auth.signUp({
-    email, password,
-    options: { data: { username }, emailRedirectTo: window.location.origin }
-  });
-  submit.disabled = false;
-  if (error) return setMsg(error.message, 'error');
-  setMsg('Account created! Check ' + email + ' to verify, then log in.', 'ok');
-  signupForm.reset();
-});
-
-// ---- LOGIN (username OR email → via our Worker endpoint) ----
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const identifier = el('liId').value.trim();
-  const password   = el('liPassword').value;
-  if (!identifier || !password) return setMsg('Enter your login and password', 'error');
-
-  const submit = el('loginSubmit'); submit.disabled = true; setMsg('Logging in…');
-  try {
-    const resp = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password })
-    });
-    const data = await resp.json();
-    if (!resp.ok) { submit.disabled = false; return setMsg(data.error || 'Login failed', 'error'); }
-
-    // establish the session in the browser (persists + auto-refreshes)
-    const { error } = await supabase.auth.setSession({
-      access_token: data.access_token, refresh_token: data.refresh_token
-    });
-    submit.disabled = false;
-    if (error) return setMsg(error.message, 'error');
-    loginForm.reset();
-    closeModal();
-    renderAuth();
-  } catch (err) {
-    submit.disabled = false;
-    setMsg('Login failed — try again', 'error');
-  }
-});
-
-// ---- reflect auth state in the nav ----
-async function renderAuth(){
-  const { data: { session } } = await supabase.auth.getSession();
-  const nav = el('navAccount');
-  if (session) {
-    const name = session.user.user_metadata?.username || 'account';
-    nav.innerHTML = `<span class="nav-user">@${name}</span><button class="nav-btn" id="logoutBtn">log out</button>`;
-    el('logoutBtn').onclick = async () => { await supabase.auth.signOut(); renderAuth(); };
-  } else {
-    nav.innerHTML = `<button class="nav-btn" id="authBtn">log in</button>`;
-    el('authBtn').onclick = () => openModal('login');
-  }
-}
-renderAuth();
 </script>
 </body>
 </html>
