@@ -42,6 +42,7 @@
       <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
       <span><span class="accent">Chord</span>Rush</span>
     </a>
+    <button class="nav-account" id="authBtn">sign up</button>
   </header>
 
   <main class="main">
@@ -89,6 +90,21 @@
       <div class="board-empty" id="boardEmpty">no times yet</div>
     </div>
   </main>
+
+  <div class="modal-overlay" id="authModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="authClose" aria-label="Close">&times;</button>
+      <h2 class="modal-title">Create account</h2>
+      <form id="signupForm" novalidate>
+        <input id="suUsername" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <input id="suEmail" type="email" placeholder="email" autocomplete="email" autocapitalize="none">
+        <input id="suPassword" type="password" placeholder="password" autocomplete="new-password">
+        <input id="suConfirm" type="password" placeholder="confirm password" autocomplete="new-password">
+        <button type="submit" class="modal-submit" id="signupSubmit">create account</button>
+      </form>
+      <div class="modal-msg" id="authMsg"></div>
+    </div>
+  </div>
 
 <script>
 /* ---------- Chords ---------- */
@@ -343,6 +359,63 @@ document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&p
 migrateLegacy();
 updateModeUI();       // sets filter states, board title, best, and renders the board
 initMidi();
+</script>
+
+<!-- Auth (talks to Supabase). Separate module so it has its own scope. -->
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Publishable/anon key: safe in frontend + public repo. RLS protects the data.
+const SUPABASE_URL = 'https://pkrvnrgqtuvbtusdncok.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const el = id => document.getElementById(id);
+const modal = el('authModal'), msg = el('authMsg');
+const setMsg = (text, kind='') => { msg.textContent = text; msg.className = 'modal-msg' + (kind ? ' ' + kind : ''); };
+const openModal  = () => { modal.hidden = false; el('suUsername').focus(); };
+const closeModal = () => { modal.hidden = true; setMsg(''); };
+
+el('authBtn').addEventListener('click', openModal);
+el('authClose').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+el('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = el('suUsername').value.trim();
+  const email    = el('suEmail').value.trim();
+  const password = el('suPassword').value;
+  const confirm  = el('suConfirm').value;
+
+  // client-side checks (mirror the DB rules for fast feedback)
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return setMsg('Username: 3–20 letters, numbers, or _', 'error');
+  if (!email)               return setMsg('Enter your email', 'error');
+  if (password.length < 6)  return setMsg('Password must be at least 6 characters', 'error');
+  if (password !== confirm) return setMsg('Passwords do not match', 'error');
+
+  const submit = el('signupSubmit');
+  submit.disabled = true;
+  setMsg('Creating account…');
+
+  // 1) is the username taken? (case-insensitive exact match; profiles is publicly readable)
+  const pattern = username.replace(/[\\%_]/g, '\\$&');
+  const { data: existing, error: checkErr } =
+    await supabase.from('profiles').select('id').ilike('username', pattern).limit(1);
+  if (checkErr) { submit.disabled = false; return setMsg('Could not check username: ' + checkErr.message, 'error'); }
+  if (existing && existing.length) { submit.disabled = false; return setMsg('That username is taken', 'error'); }
+
+  // 2) create the account — username rides along as metadata; the DB trigger writes profiles
+  const { error } = await supabase.auth.signUp({
+    email, password,
+    options: { data: { username }, emailRedirectTo: window.location.origin }
+  });
+  submit.disabled = false;
+  if (error) return setMsg(error.message, 'error');
+
+  setMsg('Account created! Check ' + email + ' to verify your email.', 'ok');
+  el('signupForm').reset();
+});
 </script>
 </body>
 </html>
