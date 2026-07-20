@@ -249,12 +249,15 @@ function showStage(){
     hud.style.display="none";
     phase="idle";
   }
+  syncStartBtn();
 }
 
 /* ---------- Game flow ---------- */
+function syncStartBtn(){ $("startBtn").textContent = (phase==="ready"||phase==="running") ? "restart" : "start"; }
 function start(){
   if(!currentInput){ showErr("no MIDI device connected — click reconnect"); return; }
   errBox.style.display="none";
+  cancelAnimationFrame(rafId);   // kill any timer still running (e.g. restart mid-run) so loops don't stack
   order=buildOrder();
   idx=0; completions=[]; startTime=0; phase="ready";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
@@ -265,6 +268,7 @@ function start(){
   refreshBest();
   promptLabel.textContent="play to start";
   showChord();
+  syncStartBtn();
 }
 function showChord(){ chordName.textContent=order[idx].name; }
 
@@ -294,6 +298,7 @@ function tick(){
 async function finish(){
   cancelAnimationFrame(rafId);
   phase="done";
+  syncStartBtn();
   filterbar.classList.remove("locked");
   const total=(completions[completions.length-1]-startTime)/1000;
   const timeMs=Math.round(total*1000);
@@ -514,6 +519,7 @@ loginForm.addEventListener('submit', handleLogin);
 /* ---------- Init ---------- */
 migrateLegacy();
 renderAuth().then(() => updateModeUI());
+syncStartBtn();
 initMidi();
 </script>
 </body>
