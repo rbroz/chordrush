@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Dashboard — ChordRush</title>
+<meta name="description" content="Your ChordRush stats and progress.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://chordrush.app/dashboard">
+
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <div class="nav-account" id="navAccount"></div>
+  </header>
+
+  <main class="main">
+    <div class="dash-gate" id="dashGate" hidden>
+      <p>Log in to see your dashboard.</p>
+      <a href="/">← back to ChordRush</a>
+    </div>
+
+    <div id="dashContent" hidden>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-val" id="kTrials">–</div><div class="kpi-lab">time trials</div></div>
+        <div class="kpi"><div class="kpi-val" id="kChords">–</div><div class="kpi-lab">chords played</div></div>
+        <div class="kpi"><div class="kpi-val" id="kSeconds">–</div><div class="kpi-lab">seconds raced</div></div>
+      </div>
+
+      <div class="dash-section">
+        <div class="dash-title">completion time by game</div>
+        <div class="filterbar" id="modeToggle">
+          <button class="filter active" data-mode="major">majors</button>
+          <button class="filter" data-mode="minor">minors</button>
+          <button class="filter" data-mode="major+minor">majors + minors</button>
+        </div>
+        <div id="chart"></div>
+        <div class="chart-empty" id="chartEmpty" style="display:none;">no runs yet</div>
+      </div>
+    </div>
+  </main>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+
+let allScores = [];
+let mode = 'major';
+const labelFor = m => m==='major' ? 'majors' : m==='minor' ? 'minors' : 'majors + minors';
+
+init();
+async function init(){
+  const { data:{ session } } = await supabase.auth.getSession();
+  renderNav(session);
+  if(!session){ $('dashGate').hidden=false; $('dashContent').hidden=true; return; }
+  $('dashGate').hidden=true; $('dashContent').hidden=false;
+
+  const { data, error } = await supabase.from('scores')
+    .select('mode, time_ms, chord_count, played_at, created_at');
+  if(error){ console.error(error); return; }
+  allScores = (data||[]).sort((a,b) =>
+    new Date(a.played_at||a.created_at) - new Date(b.played_at||b.created_at));
+
+  renderKpis();
+  wireToggle();
+  renderChart();
+}
+
+function renderNav(session){
+  const nav=$('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<span class="nav-user">@${name}</span><button class="nav-btn" id="logoutBtn">log out</button>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.href='/'; };
+  } else {
+    nav.innerHTML = `<a class="nav-btn" href="/">log in</a>`;
+  }
+}
+
+function renderKpis(){
+  $('kTrials').textContent  = allScores.length;
+  $('kChords').textContent  = allScores.reduce((s,r)=>s+(r.chord_count||0),0);
+  $('kSeconds').textContent = Math.round(allScores.reduce((s,r)=>s+(r.time_ms||0),0)/1000);
+}
+
+function wireToggle(){
+  document.querySelectorAll('#modeToggle .filter').forEach(b=>{
+    b.onclick = () => {
+      mode = b.dataset.mode;
+      document.querySelectorAll('#modeToggle .filter').forEach(x=>x.classList.toggle('active', x.dataset.mode===mode));
+      renderChart();
+    };
+  });
+}
+
+function renderChart(){
+  const chartEl=$('chart'), empty=$('chartEmpty');
+  const rows = allScores.filter(r=>r.mode===mode);
+  if(!rows.length){ chartEl.innerHTML=''; empty.textContent='no '+labelFor(mode)+' runs yet'; empty.style.display='block'; return; }
+  empty.style.display='none';
+  const series = rows.map((r,i)=>({ i:i+1, t:r.time_ms/1000 }));
+
+  const W=700,H=300,padL=48,padR=18,padT=18,padB=40;
+  const n=series.length, xMin=1, xMax=Math.max(n,2);
+  let yMin=Math.min(...series.map(d=>d.t)), yMax=Math.max(...series.map(d=>d.t));
+  if(yMin===yMax){ yMin=Math.max(0,yMin-1); yMax=yMax+1; }
+  const yp=(yMax-yMin)*0.12; yMin=Math.max(0,yMin-yp); yMax=yMax+yp;
+  const X=i=>padL+((i-xMin)/((xMax-xMin)||1))*(W-padL-padR);
+  const Y=t=>padT+(1-(t-yMin)/((yMax-yMin)||1))*(H-padT-padB);
+
+  let grid='', ylabs='';
+  for(let k=0;k<=4;k++){
+    const t=yMin+(yMax-yMin)*k/4, y=Y(t);
+    grid+=`<line class="grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"/>`;
+    ylabs+=`<text class="ylab" x="${padL-8}" y="${(y+3.5).toFixed(1)}">${t.toFixed(0)}s</text>`;
+  }
+  let xlabs='';
+  const step=Math.max(1,Math.ceil(n/6));
+  const marks=new Set(); for(let i=1;i<=n;i+=step) marks.add(i); marks.add(n);
+  marks.forEach(i=>{ xlabs+=`<text class="xlab" x="${X(i).toFixed(1)}" y="${H-padB+20}">${i}</text>`; });
+
+  const path=series.map((d,k)=>(k?'L':'M')+X(d.i).toFixed(1)+' '+Y(d.t).toFixed(1)).join(' ');
+  const dots=series.map(d=>`<circle class="dot" cx="${X(d.i).toFixed(1)}" cy="${Y(d.t).toFixed(1)}" r="4.5"><title>game ${d.i} · ${d.t.toFixed(2)}s</title></circle>`).join('');
+  const xtitle=`<text class="axis-title" x="${((padL+(W-padR))/2).toFixed(1)}" y="${H-6}">game #</text>`;
+
+  chartEl.innerHTML =
+    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="completion time by game — ${labelFor(mode)}">`
+    + grid + `<path class="line" d="${path}"/>` + dots + ylabs + xlabs + xtitle + `</svg>`;
+}
+</script>
+</body>
+</html>

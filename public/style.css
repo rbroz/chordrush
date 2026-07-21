@@ -110,7 +110,8 @@ body {
            border:1px solid var(--line); border-radius:8px; padding:7px 14px; cursor:pointer;
            transition:color .12s, border-color .12s; }
 .nav-btn:hover { color:var(--text); border-color:var(--accent); }
-.nav-user { font-family:var(--mono); font-size:14px; color:var(--accent); }
+.nav-user { font-family:var(--mono); font-size:14px; color:var(--accent); text-decoration:none; }
+.nav-user:hover { text-decoration:underline; }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(20,22,28,.45); display:flex;
                  align-items:center; justify-content:center; padding:20px; z-index:50; }
@@ -138,8 +139,33 @@ body {
 .modal-switch a { color:var(--accent); cursor:pointer; text-decoration:none; }
 .modal-switch a:hover { text-decoration:underline; }
 
+/* ---------- Dashboard ---------- */
+.dash-gate { margin-top:14vh; text-align:center; color:var(--muted); font-size:16px; }
+.dash-gate a { color:var(--accent); text-decoration:none; }
+.dash-gate a:hover { text-decoration:underline; }
+
+.kpis { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-top:6vh; }
+.kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px 26px; text-align:center; min-width:150px; }
+.kpi-val { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; }
+.kpi-lab { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:6px; }
+
+.dash-section { margin-top:52px; width:100%; max-width:720px; }
+.dash-title { font-size:12px; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); text-align:center; margin-bottom:14px; }
+.dash-section .filterbar { display:flex; margin:0 auto 20px; }
+.chart-empty { color:var(--muted); font-size:13px; text-align:center; padding:36px 0; }
+
+.chart-svg { width:100%; height:auto; }
+.chart-svg .grid { stroke:var(--line); stroke-width:1; }
+.chart-svg .line { fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+.chart-svg .dot  { fill:var(--accent); }
+.chart-svg .ylab, .chart-svg .xlab { fill:var(--muted); font-size:11px; font-family:var(--mono); }
+.chart-svg .ylab { text-anchor:end; }
+.chart-svg .xlab { text-anchor:middle; }
+.chart-svg .axis-title { fill:var(--muted); font-size:11px; font-family:var(--mono); text-anchor:middle; letter-spacing:.05em; }
+
 @media (max-width:560px){
   .nav { padding:18px 18px; }
   .tabs { gap:22px; }
   .stage { margin-top:5vh; }
+  .dash-section .filterbar { flex-wrap:wrap; }
 }
