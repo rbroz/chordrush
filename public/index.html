@@ -390,6 +390,17 @@ async function migrateLocalToAccount(){
   if(!currentSession) return;
   const uid=currentSession.user.id;
   const modes=['major','minor','major+minor'];
+
+  // Import guest times ONCE: only when the account has no scores yet.
+  // (RLS scopes this count to the current user's rows.)
+  const { count, error: cErr } = await supabase
+    .from('scores').select('id', { count:'exact', head:true });
+  if(cErr){ console.error('migrate check', cErr); return; }
+  if(count && count > 0){
+    modes.forEach(m => localStorage.removeItem(localKey(m)));  // clear lingering local so it can't re-migrate
+    return;
+  }
+
   const rows=[];
   for(const mode of modes){
     for(const e of localTop(mode)){
