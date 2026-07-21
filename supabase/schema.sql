@@ -108,3 +108,31 @@ $$;
 
 revoke execute on function public.email_for_username(text) from anon, authenticated, public;
 grant  execute on function public.email_for_username(text) to service_role;
+
+-- ============================================================
+-- 6. FRIENDSHIPS — mutual friends (request → accept).
+--    One row per relationship: the requester sends, the addressee accepts.
+--    References profiles(id) so we can embed usernames in queries.
+-- ============================================================
+create table public.friendships (
+  id           bigint generated always as identity primary key,
+  requester_id uuid not null references public.profiles(id) on delete cascade,
+  addressee_id uuid not null references public.profiles(id) on delete cascade,
+  status       text not null default 'pending' check (status in ('pending','accepted')),
+  created_at   timestamptz not null default now(),
+  unique (requester_id, addressee_id),
+  check  (requester_id <> addressee_id)      -- can't friend yourself
+);
+create index friendships_addressee_idx on public.friendships (addressee_id);
+
+alter table public.friendships enable row level security;
+
+-- These are the first RLS policies about a RELATIONSHIP between two users.
+create policy "see friendships you're in" on public.friendships for select
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+create policy "send a friend request" on public.friendships for insert
+  with check (auth.uid() = requester_id);              -- only as yourself
+create policy "respond to requests sent to you" on public.friendships for update
+  using (auth.uid() = addressee_id);                   -- only the addressee accepts/declines
+create policy "remove your friendships" on public.friendships for delete
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);

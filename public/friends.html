@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Friends — ChordRush</title>
+<meta name="description" content="Your ChordRush friends.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://chordrush.app/friends">
+
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <div class="nav-account" id="navAccount"></div>
+  </header>
+
+  <main class="main">
+    <div class="dash-gate" id="gate" hidden>
+      <p>Log in to see your friends.</p>
+      <a href="/">← back to ChordRush</a>
+    </div>
+
+    <div class="friends-wrap" id="content" hidden>
+      <form class="friends-add" id="addForm" novalidate>
+        <input id="addInput" placeholder="add a friend by username" autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button type="submit">add</button>
+      </form>
+      <div class="add-msg" id="addMsg"></div>
+
+      <div class="friends-section-title">Requests</div>
+      <div id="requests"></div>
+
+      <div class="friends-section-title">Friends</div>
+      <div id="friendsList"></div>
+
+      <div id="outgoing"></div>
+    </div>
+  </main>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let myId=null, myName='', rows=[];
+
+init();
+async function init(){
+  const { data:{ session } } = await supabase.auth.getSession();
+  renderNav(session);
+  if(!session){ $('gate').hidden=false; $('content').hidden=true; return; }
+  $('gate').hidden=true; $('content').hidden=false;
+  myId = session.user.id;
+  myName = session.user.user_metadata?.username || '';
+  $('addForm').addEventListener('submit', onAdd);
+  loadFriends();
+}
+
+function renderNav(session){
+  const nav=$('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${esc(name)} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <a href="/friends">Friends</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.href='/'; };
+  } else {
+    nav.innerHTML = `<a class="nav-btn" href="/">log in</a>`;
+  }
+}
+
+async function loadFriends(){
+  const { data, error } = await supabase.from('friendships')
+    .select('id, status, requester_id, addressee_id, requester:profiles!requester_id(username), addressee:profiles!addressee_id(username)');
+  if(error){ console.error('loadFriends', error); return; }
+  rows = data || [];
+
+  const friends=[], incoming=[], outgoing=[];
+  for(const f of rows){
+    const iAmRequester = f.requester_id===myId;
+    const other = iAmRequester
+      ? { id:f.addressee_id, name:f.addressee?.username }
+      : { id:f.requester_id, name:f.requester?.username };
+    const row = { id:f.id, other };
+    if(f.status==='accepted') friends.push(row);
+    else if(!iAmRequester) incoming.push(row);   // pending, sent to me
+    else outgoing.push(row);                      // pending, I sent
+  }
+  renderRequests(incoming);
+  renderFriends(friends);
+  renderOutgoing(outgoing);
+}
+
+function renderRequests(list){
+  const el=$('requests');
+  if(!list.length){ el.innerHTML='<div class="muted-note">no pending requests</div>'; return; }
+  el.innerHTML = list.map(f=>`<div class="frow">
+      <span class="fname">@${esc(f.other.name)}</span>
+      <span><button class="btn-accept" data-accept="${f.id}">accept</button><button data-remove="${f.id}">decline</button></span>
+    </div>`).join('');
+  wireButtons(el);
+}
+function renderFriends(list){
+  const el=$('friendsList');
+  if(!list.length){ el.innerHTML='<div class="muted-note">no friends yet — add someone above</div>'; return; }
+  el.innerHTML = list.map(f=>`<div class="frow">
+      <span class="fname">@${esc(f.other.name)}</span>
+      <button data-remove="${f.id}">remove</button>
+    </div>`).join('');
+  wireButtons(el);
+}
+function renderOutgoing(list){
+  const el=$('outgoing');
+  if(!list.length){ el.innerHTML=''; return; }
+  el.innerHTML = `<div class="friends-section-title">Pending sent</div>` + list.map(f=>`<div class="frow">
+      <span class="fname">@${esc(f.other.name)}</span>
+      <span class="pending-tag">pending</span>
+    </div>`).join('');
+}
+function wireButtons(el){
+  el.querySelectorAll('[data-accept]').forEach(b=>b.onclick=()=>accept(b.dataset.accept));
+  el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>removeRow(b.dataset.remove));
+}
+
+async function accept(id){
+  const { error } = await supabase.from('friendships').update({ status:'accepted' }).eq('id', id);
+  if(error) console.error('accept', error);
+  loadFriends();
+}
+async function removeRow(id){
+  const { error } = await supabase.from('friendships').delete().eq('id', id);
+  if(error) console.error('remove', error);
+  loadFriends();
+}
+
+async function onAdd(e){
+  e.preventDefault();
+  const uname = $('addInput').value.trim();
+  const setMsg=(t,k='')=>{ const m=$('addMsg'); m.textContent=t; m.className='add-msg'+(k?' '+k:''); };
+  if(!uname) return;
+  if(uname.toLowerCase()===myName.toLowerCase()) return setMsg("that's you!", 'error');
+
+  // find the user by username (profiles is publicly readable)
+  const pat = uname.replace(/[\\%_]/g, '\\$&');
+  const { data:profs, error:pe } = await supabase.from('profiles').select('id, username').ilike('username', pat).limit(1);
+  if(pe){ return setMsg('lookup failed', 'error'); }
+  if(!profs || !profs.length) return setMsg('no user "@'+uname+'"', 'error');
+  const target = profs[0];
+
+  // already a relationship? (check both directions from loaded rows)
+  const existing = rows.find(f =>
+    (f.requester_id===myId && f.addressee_id===target.id) ||
+    (f.requester_id===target.id && f.addressee_id===myId));
+  if(existing){
+    if(existing.status==='accepted') return setMsg('already friends with @'+target.username, 'error');
+    if(existing.requester_id===myId) return setMsg('request already sent', 'error');
+    // they already requested you → accept it
+    await accept(existing.id);
+    return setMsg('you\'re now friends with @'+target.username, 'ok');
+  }
+
+  const { error } = await supabase.from('friendships').insert({ requester_id: myId, addressee_id: target.id });
+  if(error){ console.error('add', error); return setMsg('could not send request', 'error'); }
+  setMsg('request sent to @'+target.username, 'ok');
+  $('addInput').value='';
+  loadFriends();
+}
+</script>
+</body>
+</html>

@@ -512,7 +512,14 @@ async function renderAuth(){
   const nav = $('navAccount');
   if(session){
     const name = session.user.user_metadata?.username || 'account';
-    nav.innerHTML = `<a class="nav-user" href="/dashboard" title="Your dashboard">@${name}</a><button class="nav-btn" id="logoutBtn">log out</button>`;
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <a href="/friends">Friends</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
     $('logoutBtn').onclick = async () => {
       await supabase.auth.signOut();
       currentSession = null;
