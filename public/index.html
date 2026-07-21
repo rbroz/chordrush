@@ -311,12 +311,13 @@ async function finish(){
   filterbar.classList.remove("locked");
   const total=(completions[completions.length-1]-startTime)/1000;
   const timeMs=Math.round(total*1000);
+  const playedAt=new Date().toISOString();   // unique per run → dedup key + accurate date
   hTime.textContent=total.toFixed(2);
   playWrap.style.display="none"; doneWrap.style.display="block";
   $("doneTotal").textContent=total.toFixed(2)+"s";
 
   // save the run (DB if logged in, else localStorage), then read back the fresh top 5
-  await addScore(modeKey(), timeMs, order.length);
+  await addScore(modeKey(), timeMs, order.length, playedAt);
   const top = await getTop(modeKey());
   const rank = top.findIndex(e => e.t.toFixed(2) === total.toFixed(2));
 
@@ -353,27 +354,30 @@ function flash(){ stage.classList.remove("flash-good"); void stage.offsetWidth; 
 async function getTop(mode){
   if(currentSession){
     const { data, error } = await supabase
-      .from('scores').select('time_ms, created_at')
+      .from('scores').select('time_ms, created_at, played_at')
       .eq('mode', mode).order('time_ms', { ascending:true }).limit(MAX_TOP);
     if(error){ console.error('getTop', error); return []; }
-    return data.map(r => ({ t: r.time_ms/1000, d: r.created_at }));
+    return data.map(r => ({ t: r.time_ms/1000, d: r.played_at || r.created_at }));
   }
   return localTop(mode);
 }
-async function addScore(mode, timeMs, chordCount){
+async function addScore(mode, timeMs, chordCount, playedAt){
   if(currentSession){
-    const { error } = await supabase.from('scores')
-      .insert({ user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount });
+    // played_at is the run's unique key; on conflict the DB ignores the dup
+    const { error } = await supabase.from('scores').upsert(
+      { user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount, played_at: playedAt },
+      { onConflict:'user_id,played_at', ignoreDuplicates:true }
+    );
     if(error) console.error('addScore', error);
   } else {
-    localAddScore(mode, timeMs);
+    localAddScore(mode, timeMs, playedAt);
   }
 }
 function localKey(mode){ return 'chordrushTop5:'+mode; }
 function localTop(mode){ try{ const a=JSON.parse(localStorage.getItem(localKey(mode))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function localAddScore(mode, timeMs){
+function localAddScore(mode, timeMs, playedAt){
   const arr=localTop(mode);
-  arr.push({ t:timeMs/1000, d:new Date().toISOString() });
+  arr.push({ t:timeMs/1000, d:playedAt });   // d = finish time, becomes played_at on migration
   arr.sort((a,b)=>a.t-b.t);
   localStorage.setItem(localKey(mode), JSON.stringify(arr.slice(0,MAX_TOP)));
 }
@@ -391,25 +395,26 @@ async function migrateLocalToAccount(){
   const uid=currentSession.user.id;
   const modes=['major','minor','major+minor'];
 
-  // Import guest times ONCE: only when the account has no scores yet.
-  // (RLS scopes this count to the current user's rows.)
-  const { count, error: cErr } = await supabase
-    .from('scores').select('id', { count:'exact', head:true });
-  if(cErr){ console.error('migrate check', cErr); return; }
-  if(count && count > 0){
-    modes.forEach(m => localStorage.removeItem(localKey(m)));  // clear lingering local so it can't re-migrate
-    return;
-  }
-
+  // Snapshot guest scores and clear local IMMEDIATELY (before the async insert),
+  // so the same data can never be imported twice — even on rapid re-logins.
+  // This still merges guest play for EXISTING accounts (no data discarded).
   const rows=[];
   for(const mode of modes){
     for(const e of localTop(mode)){
-      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count: mode==='major+minor'?24:12 });
+      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count: mode==='major+minor'?24:12, played_at:e.d });
     }
+    localStorage.removeItem(localKey(mode));
   }
-  if(rows.length){
-    const { error } = await supabase.from('scores').insert(rows);
-    if(!error) modes.forEach(m => localStorage.removeItem(localKey(m)));
+  if(!rows.length) return;
+
+  // upsert on (user_id, played_at): re-importing the same run is a harmless no-op
+  const { error } = await supabase.from('scores').upsert(rows, { onConflict:'user_id,played_at', ignoreDuplicates:true });
+  if(error){
+    // insert failed → restore local so nothing is lost; it'll retry next login
+    console.error('migrate insert', error);
+    const byMode={};
+    for(const r of rows){ const g = byMode[r.mode] || (byMode[r.mode]=[]); g.push({ t:r.time_ms/1000, d:r.played_at }); }
+    for(const mode in byMode) localStorage.setItem(localKey(mode), JSON.stringify(byMode[mode]));
   }
 }
 

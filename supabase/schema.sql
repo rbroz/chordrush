@@ -27,11 +27,16 @@ create table public.scores (
   mode        text not null,                    -- 'major' | 'minor' | 'major+minor'
   time_ms     integer not null check (time_ms > 0),
   chord_count smallint,                         -- 12 or 24, for context
+  played_at   timestamptz,                      -- client run-finish time; unique per run (dedup key + true date)
   created_at  timestamptz not null default now()
 );
 
 -- Fast "my best times for this mode": WHERE user_id=? AND mode=? ORDER BY time_ms
 create index scores_user_mode_time_idx on public.scores (user_id, mode, time_ms);
+
+-- Idempotency: a run can't be recorded twice. (NULLs are distinct, so legacy
+-- rows without played_at are unaffected.) Inserts use ON CONFLICT DO NOTHING.
+create unique index scores_user_playedat_uidx on public.scores (user_id, played_at);
 
 -- ============================================================
 -- 3. ROW-LEVEL SECURITY (RLS)
