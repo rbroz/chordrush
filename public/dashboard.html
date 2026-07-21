@@ -41,6 +41,7 @@
           <button class="filter" data-mode="minor">minors</button>
           <button class="filter" data-mode="major+minor">majors + minors</button>
         </div>
+        <div class="pr-banner" id="prBanner"></div>
         <div id="chart"></div>
         <div class="chart-empty" id="chartEmpty" style="display:none;">no runs yet</div>
       </div>
@@ -107,9 +108,11 @@ function wireToggle(){
 function renderChart(){
   const chartEl=$('chart'), empty=$('chartEmpty');
   const rows = allScores.filter(r=>r.mode===mode);
-  if(!rows.length){ chartEl.innerHTML=''; empty.textContent='no '+labelFor(mode)+' runs yet'; empty.style.display='block'; return; }
+  if(!rows.length){ $('prBanner').innerHTML=''; chartEl.innerHTML=''; empty.textContent='no '+labelFor(mode)+' runs yet'; empty.style.display='block'; return; }
   empty.style.display='none';
   const series = rows.map((r,i)=>({ i:i+1, t:r.time_ms/1000 }));
+  const pr = Math.min(...series.map(d=>d.t));
+  $('prBanner').innerHTML = '<span>🏆 personal record <b>'+pr.toFixed(2)+'s</b></span>';
 
   const W=700,H=300,padL=48,padR=18,padT=18,padB=40;
   const n=series.length, xMin=1, xMax=Math.max(n,2);
@@ -130,13 +133,50 @@ function renderChart(){
   const marks=new Set(); for(let i=1;i<=n;i+=step) marks.add(i); marks.add(n);
   marks.forEach(i=>{ xlabs+=`<text class="xlab" x="${X(i).toFixed(1)}" y="${H-padB+20}">${i}</text>`; });
 
+  const baseY=H-padB;
   const path=series.map((d,k)=>(k?'L':'M')+X(d.i).toFixed(1)+' '+Y(d.t).toFixed(1)).join(' ');
-  const dots=series.map(d=>`<circle class="dot" cx="${X(d.i).toFixed(1)}" cy="${Y(d.t).toFixed(1)}" r="4.5"><title>game ${d.i} · ${d.t.toFixed(2)}s</title></circle>`).join('');
+  const pts=series.map(d=>{
+    const cx=X(d.i).toFixed(1), cy=Y(d.t).toFixed(1), label='#'+d.i+' · '+d.t.toFixed(2)+'s';
+    return `<g class="pt" data-cx="${cx}" data-cy="${cy}" data-label="${label}">`
+      + `<circle class="hit" cx="${cx}" cy="${cy}" r="16"/>`
+      + `<circle class="dot" cx="${cx}" cy="${cy}" r="4.5"/></g>`;
+  }).join('');
   const xtitle=`<text class="axis-title" x="${((padL+(W-padR))/2).toFixed(1)}" y="${H-6}">game #</text>`;
 
   chartEl.innerHTML =
     `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="completion time by game — ${labelFor(mode)}">`
-    + grid + `<path class="line" d="${path}"/>` + dots + ylabs + xlabs + xtitle + `</svg>`;
+    + grid
+    + `<line class="crosshair" style="display:none"/>`
+    + `<path class="line" d="${path}"/>`
+    + pts + ylabs + xlabs + xtitle
+    + `<g class="tip" style="display:none"><rect rx="6" ry="6" height="22"/><text></text></g>`
+    + `</svg>`;
+
+  // hover: grow the dot, show a value tooltip, drop a crosshair to the axis
+  const svg=chartEl.querySelector('svg');
+  const tip=svg.querySelector('.tip'), tipRect=tip.querySelector('rect'), tipText=tip.querySelector('text');
+  const cross=svg.querySelector('.crosshair');
+  svg.querySelectorAll('.pt').forEach(g=>{
+    const dot=g.querySelector('.dot');
+    const cx=parseFloat(g.dataset.cx), cy=parseFloat(g.dataset.cy), label=g.dataset.label;
+    g.addEventListener('mouseenter', ()=>{
+      dot.setAttribute('r','7.5');
+      cross.setAttribute('x1',cx); cross.setAttribute('x2',cx);
+      cross.setAttribute('y1',cy.toFixed(1)); cross.setAttribute('y2',baseY);
+      cross.style.display='';
+      tipText.textContent=label;
+      const w=label.length*7.2+18, half=w/2;
+      const tx=Math.max(padL+half, Math.min(W-padR-half, cx));
+      const above = cy-36 > 2;
+      tipRect.setAttribute('x',(tx-half).toFixed(1));
+      tipRect.setAttribute('y',(above?cy-34:cy+12).toFixed(1));
+      tipRect.setAttribute('width',w.toFixed(1));
+      tipText.setAttribute('x',tx.toFixed(1));
+      tipText.setAttribute('y',(above?cy-19:cy+27).toFixed(1));
+      tip.style.display='';
+    });
+    g.addEventListener('mouseleave', ()=>{ dot.setAttribute('r','4.5'); tip.style.display='none'; cross.style.display='none'; });
+  });
 }
 </script>
 </body>

@@ -154,10 +154,19 @@ body {
 .dash-section .filterbar { display:flex; margin:0 auto 20px; }
 .chart-empty { color:var(--muted); font-size:13px; text-align:center; padding:36px 0; }
 
+.pr-banner { text-align:center; margin:0 0 16px; min-height:32px; }
+.pr-banner span { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:13px; color:var(--text);
+                  background:rgba(91,124,250,.10); border:1px solid rgba(91,124,250,.28); border-radius:999px; padding:6px 15px; }
+.pr-banner b { color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
+
 .chart-svg { width:100%; height:auto; }
 .chart-svg .grid { stroke:var(--line); stroke-width:1; }
 .chart-svg .line { fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
-.chart-svg .dot  { fill:var(--accent); }
+.chart-svg .dot  { fill:var(--accent); transition:r .12s ease; }
+.chart-svg .hit  { fill:transparent; cursor:pointer; }
+.chart-svg .crosshair { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.45; }
+.chart-svg .tip rect { fill:var(--text); }
+.chart-svg .tip text { fill:#fff; font-size:12px; font-family:var(--mono); text-anchor:middle; }
 .chart-svg .ylab, .chart-svg .xlab { fill:var(--muted); font-size:11px; font-family:var(--mono); }
 .chart-svg .ylab { text-anchor:end; }
 .chart-svg .xlab { text-anchor:middle; }
