@@ -58,6 +58,11 @@
       <button class="filter" data-type="major">majors</button>
       <button class="filter" data-type="minor">minors</button>
     </div>
+    <div class="filterbar" id="invbar">
+      <button class="filter" data-inv="0">root</button>
+      <button class="filter" data-inv="1">1st inv</button>
+      <button class="filter" data-inv="2">2nd inv</button>
+    </div>
 
     <div class="stage" id="stage">
       <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
@@ -131,24 +136,88 @@ const ROOTS = [
   {name:"E",pc:4},{name:"F",pc:5},{name:"F♯",pc:6},{name:"G",pc:7},
   {name:"A♭",pc:8},{name:"A",pc:9},{name:"B♭",pc:10},{name:"B",pc:11},
 ];
+// Each chord = a set of semitone intervals above the root. The matcher compares
+// pitch-class SETS, so any family defined here is playable for free — the filter
+// bar only exposes major/minor, but AI-built tests can use all of them.
 const CHORD_TYPES = {
-  major: { label:"majors", suffix:" Major", ivals:[0,4,7] },
-  minor: { label:"minors", suffix:" minor", ivals:[0,3,7] },
+  major: { label:"majors", suffix:" Major", sym:"",     ivals:[0,4,7] },
+  minor: { label:"minors", suffix:" minor", sym:"m",    ivals:[0,3,7] },
+  dim:   { label:"dim",    suffix:" dim",   sym:"°",    ivals:[0,3,6] },
+  aug:   { label:"aug",    suffix:" aug",   sym:"+",    ivals:[0,4,8] },
+  maj7:  { label:"maj7",   suffix:" maj7",  sym:"maj7", ivals:[0,4,7,11] },
+  min7:  { label:"min7",   suffix:" m7",    sym:"m7",   ivals:[0,3,7,10] },
+  dom7:  { label:"dom7",   suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
 };
-const enabled = { major:true, minor:false };   // which chord types are in the pool
+const enabled = { major:true, minor:false };   // filter-bar pool (major/minor only)
+const enabledInv = { 0:true, 1:true, 2:true };   // inversions in the pool; all three = "any voicing" (the default → today's game)
 
-const chordFor = (r,type)=>({ name:r.name+CHORD_TYPES[type].suffix, type, pcs:CHORD_TYPES[type].ivals.map(i=>(r.pc+i)%12) });
+// pitch class → note name, for slash-chord bass labels ("G/B")
+const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
+const INV_LABEL = ["root", "1st inv", "2nd inv", "3rd inv"];   // used by the board's mode label
+// inv = which chord tone is in the bass: 0 root, 1 first inv (3rd), 2 second inv (5th), 3 (7ths).
+// anyVoicing = accept any bass (all inversions on → "play it however").
+function chordFor(r, type, inv=0, anyVoicing=false){
+  const T = CHORD_TYPES[type];
+  const pcs = T.ivals.map(i => (r.pc + i) % 12);
+  const readable = r.name + T.suffix;                                 // "G Major"
+  if(anyVoicing) return { name: readable, type, inv:0, pcs };         // no bass requirement (today's game)
+  if(!inv)       return { name: readable, type, inv:0, pcs, bass:r.pc }; // strict root: root in bass
+  const bass = (r.pc + T.ivals[inv]) % 12;                            // must be the lowest note
+  return { name: r.name + T.sym + "/" + PC_NAME[bass], type, inv, pcs, bass };  // "G/B"
+}
 const enabledTypes = ()=>Object.keys(CHORD_TYPES).filter(t=>enabled[t]);
-function buildOrder(){
+const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
+// No arg  → current behavior: every root × each filter-bar-enabled type, shuffled.
+// A config → an AI-built test: {types, roots (pitch classes 0–11), count}.
+function buildOrder(config){
+  if(config){
+    const roots = config.roots
+      .map(pc => ROOTS.find(r => r.pc === pc))
+      .filter(Boolean);                                 // ignore any bad pitch class
+    const pool = [];
+    for(const type of config.types)
+      if(CHORD_TYPES[type])                             // ignore any unknown family
+        for(const r of roots) pool.push(chordFor(r, type, 0, true));
+    if(!pool.length) return [];
+
+    const want = config.count || pool.length;
+    const out = [];
+    let bag = shuffled(pool);
+    while(out.length < want){
+      if(!bag.length) bag = shuffled(pool);            // refill to repeat if count > pool
+      out.push(bag.shift());
+    }
+    return out;
+  }
+  // Filter-bar test: always one chord per (type × root) so run length stays fixed
+  // (12 per type). All inversions on → any voicing; a subset → each chord gets a
+  // RANDOM inversion from the selected set, so they're mixed in without lengthening.
+  const invs = enabledInvs();
+  const anyVoicing = invs.length === 3;
   const list=[];
-  for(const type of enabledTypes()) for(const r of ROOTS) list.push(chordFor(r,type));
+  for(const type of enabledTypes())
+    for(const r of ROOTS){
+      if(anyVoicing){ list.push(chordFor(r, type, 0, true)); continue; }
+      const inv = invs[Math.floor(Math.random()*invs.length)];   // random inversion for this chord
+      list.push(chordFor(r, type, inv));
+    }
   return shuffled(list);
 }
 function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 /* ---------- Mode (drives which leaderboard is active) ---------- */
-const modeKey   = ()=>enabledTypes().join("+");                                   // "major" | "minor" | "major+minor"
-const modeLabel = ()=>enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
+// All inversions on ("any voicing") keeps the legacy key so existing boards persist.
+// A subset is its own mode: e.g. "major|1,2", shown as "majors · 1st/2nd".
+function modeKey(){
+  const t = enabledTypes().join("+");
+  const invs = enabledInvs();
+  return invs.length===3 ? t : t + "|" + invs.join(",");
+}
+function modeLabel(){
+  const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
+  const invs = enabledInvs();
+  return invs.length===3 ? types : types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
+}
 const MAX_TOP=5;
 
 /* ---------- State ---------- */
@@ -165,7 +234,7 @@ const statusDot=$("statusDot"), statusText=$("statusText"), deviceSelect=$("devi
 const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$("doneWrap");
 const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest");
-const filterbar=$("filterbar");
+const filterbar=$("filterbar"), invbar=$("invbar");
 const modal=$("authModal"), msg=$("authMsg"), loginForm=$("loginForm"), signupForm=$("signupForm");
 const setMsg=(t,kind='')=>{ msg.textContent=t; msg.className='modal-msg'+(kind?' '+kind:''); };
 
@@ -214,18 +283,31 @@ function checkMatch(){
   const notes=[...heldNotes.keys()];
   if(!notes.length) return;
   const held=new Set(notes.map(n=>n%12));
-  const tgt=new Set(order[idx].pcs);
+  const chord=order[idx];
+  const tgt=new Set(chord.pcs);
   if(held.size!==tgt.size) return;
   for(const p of tgt) if(!held.has(p)) return;
+  // inversion drills also require the correct lowest note; root chords stay bass-agnostic
+  if(chord.bass!=null && (Math.min(...notes) % 12)!==chord.bass) return;
   advance();
 }
 
 /* ---------- Filter bar ---------- */
 function toggleType(type){
   if(phase==="running") return;                          // locked only once the clock is running
-  if(enabled[type] && enabledTypes().length===1) return; // keep at least one on
+  if(enabled[type] && enabledTypes().length===1) return; // keep at least one type on
   enabled[type]=!enabled[type];
-  if(phase==="ready"){                                    // reconfigure the not-yet-started run
+  reconfigure();
+}
+function toggleInv(i){
+  if(phase==="running") return;
+  if(enabledInv[i] && enabledInvs().length===1) return;  // keep at least one inversion on
+  enabledInv[i]=!enabledInv[i];
+  reconfigure();
+}
+// A filter changed: rebuild the not-yet-started run, or refresh the idle/done stage.
+function reconfigure(){
+  if(phase==="ready"){
     updateModeUI();
     order=buildOrder(); idx=0;
     hProg.textContent="1 / "+order.length;
@@ -235,7 +317,8 @@ function toggleType(type){
   }
 }
 async function updateModeUI(){
-  document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
+  document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
+  document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !!enabledInv[b.dataset.inv]));
   $("boardTitle").textContent = "Top 5 · " + modeLabel();
   await refreshBoard();
 }
@@ -268,7 +351,7 @@ function start(){
   order=buildOrder();
   idx=0; completions=[]; startTime=0; phase="ready";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
-  filterbar.classList.remove("locked");   // stays changeable until the clock starts
+  filterbar.classList.remove("locked"); invbar.classList.remove("locked");   // stays changeable until the clock starts
   hud.style.display="flex";
   hTime.textContent="0.00"; hTime.classList.add("dim");
   hProg.textContent="1 / "+order.length;
@@ -284,7 +367,7 @@ function advance(){
   flash();
   if(phase==="ready"){                 // first chord = the go-signal
     startTime=now; completions=[now]; phase="running";
-    filterbar.classList.add("locked");  // lock the pool now that the clock is running
+    filterbar.classList.add("locked"); invbar.classList.add("locked");  // lock the pool now that the clock is running
     syncStartBtn();                     // now running → button becomes "restart"
     hTime.classList.remove("dim");
     promptLabel.textContent="play";
@@ -308,7 +391,7 @@ async function finish(){
   cancelAnimationFrame(rafId);
   phase="done";
   syncStartBtn();
-  filterbar.classList.remove("locked");
+  filterbar.classList.remove("locked"); invbar.classList.remove("locked");
   const total=(completions[completions.length-1]-startTime)/1000;
   const timeMs=Math.round(total*1000);
   const playedAt=new Date().toISOString();   // unique per run → dedup key + accurate date
@@ -389,11 +472,23 @@ function migrateLegacy(){   // old local keys → current local key (guest histo
   const oldBest=parseFloat(localStorage.getItem("majorRunBestV1")||"");
   if(!isNaN(oldBest)) localStorage.setItem(mk, JSON.stringify([{t:oldBest, d:new Date().toISOString()}]));
 }
-// On login, move any guest (localStorage) times into the account once, then clear them.
+// chord count for a mode key: one chord per (type × root), fixed regardless of
+// inversions (they're mixed in, not stacked). "major"→12, "major+minor"→24.
+function countForMode(mode){
+  return mode.split('|')[0].split('+').length * ROOTS.length;
+}
+// On login, move ALL guest (localStorage) boards into the account once, then clear them.
 async function migrateLocalToAccount(){
   if(!currentSession) return;
   const uid=currentSession.user.id;
-  const modes=['major','minor','major+minor'];
+
+  // Find every guest board — any mode, including inversion drills like "major|1".
+  const prefix='chordrushTop5:';
+  const modes=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k && k.startsWith(prefix)) modes.push(k.slice(prefix.length));
+  }
 
   // Snapshot guest scores and clear local IMMEDIATELY (before the async insert),
   // so the same data can never be imported twice — even on rapid re-logins.
@@ -401,7 +496,7 @@ async function migrateLocalToAccount(){
   const rows=[];
   for(const mode of modes){
     for(const e of localTop(mode)){
-      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count: mode==='major+minor'?24:12, played_at:e.d });
+      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count:countForMode(mode), played_at:e.d });
     }
     localStorage.removeItem(localKey(mode));
   }
@@ -536,7 +631,8 @@ async function renderAuth(){
 $("reconnectBtn").onclick=initMidi;
 deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
-document.querySelectorAll(".filter").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
+document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
+document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&phase!=="running"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);
