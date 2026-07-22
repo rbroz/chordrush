@@ -149,7 +149,7 @@ const CHORD_TYPES = {
   dom7:  { label:"dom7",   suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
 };
 const enabled = { major:true, minor:false };   // filter-bar pool (major/minor only)
-const enabledInv = { 0:true, 1:true, 2:true };   // inversions in the pool; all three = "any voicing" (the default → today's game)
+const enabledInv = { 0:true, 1:false, 2:false };   // default = root only → the classic leaderboard
 
 // pitch class → note name, for slash-chord bass labels ("G/B")
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
@@ -206,17 +206,21 @@ function buildOrder(config){
 function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 /* ---------- Mode (drives which leaderboard is active) ---------- */
-// All inversions on ("any voicing") keeps the legacy key so existing boards persist.
-// A subset is its own mode: e.g. "major|1,2", shown as "majors · 1st/2nd".
+// ROOT-ONLY keeps the legacy key ("major" etc.) so the original leaderboard carries over.
+// All three on = "any voicing" (its own board); any other subset = an inversion drill.
 function modeKey(){
   const t = enabledTypes().join("+");
   const invs = enabledInvs();
-  return invs.length===3 ? t : t + "|" + invs.join(",");
+  if(invs.length===1 && invs[0]===0) return t;        // root only → the classic board
+  if(invs.length===3)                return t + "|any";
+  return t + "|" + invs.join(",");
 }
 function modeLabel(){
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
   const invs = enabledInvs();
-  return invs.length===3 ? types : types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
+  if(invs.length===1 && invs[0]===0) return types;
+  if(invs.length===3)                return types + " · any voicing";
+  return types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
 }
 const MAX_TOP=5;
 
