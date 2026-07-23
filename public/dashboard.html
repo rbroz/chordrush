@@ -36,10 +36,14 @@
 
       <div class="dash-section">
         <div class="dash-title">completion time by game</div>
-        <div class="filterbar" id="modeToggle">
-          <button class="filter active" data-mode="major">majors</button>
-          <button class="filter" data-mode="minor">minors</button>
-          <button class="filter" data-mode="major+minor">majors + minors</button>
+        <div class="filterbar" id="typeToggle">
+          <button class="filter active" data-type="major">majors</button>
+          <button class="filter" data-type="minor">minors</button>
+        </div>
+        <div class="filterbar" id="invToggle">
+          <button class="filter active" data-inv="0">root</button>
+          <button class="filter" data-inv="1">1st inv</button>
+          <button class="filter" data-inv="2">2nd inv</button>
         </div>
         <div class="pr-banner" id="prBanner"></div>
         <div id="chart"></div>
@@ -58,7 +62,29 @@ const $ = id => document.getElementById(id);
 
 let allScores = [];
 let mode = 'major';
-const labelFor = m => m==='major' ? 'majors' : m==='minor' ? 'minors' : 'majors + minors';
+const TYPE_LABEL = { major:'majors', minor:'minors' };
+const INV_LABEL  = ['root','1st inv','2nd inv','3rd inv'];
+// Same selection model as the main page: toggle type(s) + inversion(s); the chosen
+// combination maps to a stored mode key (root-only → "major", all three → "major|any").
+const enabled    = { major:true, minor:false };
+const enabledInv = { 0:true, 1:false, 2:false };
+const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
+const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
+function modeKey(){
+  const t = enabledTypes().join('+');
+  const invs = enabledInvs();
+  if(invs.length===1 && invs[0]===0) return t;
+  if(invs.length===3)                return t + '|any';
+  return t + '|' + invs.join(',');
+}
+// Readable label for the chart's empty state ("major|1" → "majors · 1st inv").
+function labelForMode(m){
+  const [typePart, invPart] = m.split('|');
+  const types = typePart.split('+').map(t=>TYPE_LABEL[t]||t).join(' + ');
+  if(!invPart)        return types;
+  if(invPart==='any') return types + ' · any voicing';
+  return types + ' · ' + invPart.split(',').map(i=>INV_LABEL[+i]).join('/');
+}
 
 init();
 async function init(){
@@ -73,9 +99,10 @@ async function init(){
   allScores = (data||[]).sort((a,b) =>
     new Date(a.played_at||a.created_at) - new Date(b.played_at||b.created_at));
 
+  document.querySelectorAll('#typeToggle .filter').forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
+  document.querySelectorAll('#invToggle .filter').forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
   renderKpis();
-  wireToggle();
-  renderChart();
+  refresh();   // sets active chips + mode + renders the chart
 }
 
 function renderNav(session){
@@ -102,20 +129,28 @@ function renderKpis(){
   $('kSeconds').textContent = Math.round(allScores.reduce((s,r)=>s+(r.time_ms||0),0)/1000);
 }
 
-function wireToggle(){
-  document.querySelectorAll('#modeToggle .filter').forEach(b=>{
-    b.onclick = () => {
-      mode = b.dataset.mode;
-      document.querySelectorAll('#modeToggle .filter').forEach(x=>x.classList.toggle('active', x.dataset.mode===mode));
-      renderChart();
-    };
-  });
+// Filter toggles mirror the main page: keep at least one type and one inversion on.
+function toggleType(type){
+  if(enabled[type] && enabledTypes().length===1) return;
+  enabled[type]=!enabled[type];
+  refresh();
+}
+function toggleInv(i){
+  if(enabledInv[i] && enabledInvs().length===1) return;
+  enabledInv[i]=!enabledInv[i];
+  refresh();
+}
+function refresh(){
+  document.querySelectorAll('#typeToggle .filter').forEach(b=>b.classList.toggle('active', !!enabled[b.dataset.type]));
+  document.querySelectorAll('#invToggle .filter').forEach(b=>b.classList.toggle('active', !!enabledInv[b.dataset.inv]));
+  mode = modeKey();
+  renderChart();
 }
 
 function renderChart(){
   const chartEl=$('chart'), empty=$('chartEmpty');
   const rows = allScores.filter(r=>r.mode===mode);
-  if(!rows.length){ $('prBanner').innerHTML=''; chartEl.innerHTML=''; empty.textContent='no '+labelFor(mode)+' runs yet'; empty.style.display='block'; return; }
+  if(!rows.length){ $('prBanner').innerHTML=''; chartEl.innerHTML=''; empty.textContent='no '+labelForMode(mode)+' runs yet'; empty.style.display='block'; return; }
   empty.style.display='none';
   const series = rows.map((r,i)=>({ i:i+1, t:r.time_ms/1000 }));
   const pr = Math.min(...series.map(d=>d.t));
@@ -151,7 +186,7 @@ function renderChart(){
   const xtitle=`<text class="axis-title" x="${((padL+(W-padR))/2).toFixed(1)}" y="${H-6}">game #</text>`;
 
   chartEl.innerHTML =
-    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="completion time by game — ${labelFor(mode)}">`
+    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="completion time by game — ${labelForMode(mode)}">`
     + grid
     + `<line class="crosshair" style="display:none"/>`
     + `<path class="line" d="${path}"/>`
