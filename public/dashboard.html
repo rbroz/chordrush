@@ -31,7 +31,7 @@
       <div class="kpis">
         <div class="kpi"><div class="kpi-val" id="kTrials">–</div><div class="kpi-lab">time trials</div></div>
         <div class="kpi"><div class="kpi-val" id="kChords">–</div><div class="kpi-lab">chords played</div></div>
-        <div class="kpi"><div class="kpi-val" id="kSeconds">–</div><div class="kpi-lab">seconds raced</div></div>
+        <div class="kpi"><div class="kpi-val" id="kSeconds">–</div><div class="kpi-lab">time raced</div></div>
       </div>
 
       <div class="dash-section">
@@ -126,7 +126,14 @@ function renderNav(session){
 function renderKpis(){
   $('kTrials').textContent  = allScores.length;
   $('kChords').textContent  = allScores.reduce((s,r)=>s+(r.chord_count||0),0);
-  $('kSeconds').textContent = Math.round(allScores.reduce((s,r)=>s+(r.time_ms||0),0)/1000);
+  $('kSeconds').textContent = fmtDuration(allScores.reduce((s,r)=>s+(r.time_ms||0),0)/1000);
+}
+// Human duration, at most two units: ≤60s → "45s"; ≤60m → "2m 15s"; else "1h 23m".
+function fmtDuration(totalSec){
+  totalSec = Math.round(totalSec);
+  if(totalSec <= 60)   return totalSec + 's';
+  if(totalSec <= 3600) return Math.floor(totalSec/60) + 'm ' + (totalSec%60) + 's';
+  return Math.floor(totalSec/3600) + 'h ' + Math.floor((totalSec%3600)/60) + 'm';
 }
 
 // Filter toggles mirror the main page: keep at least one type and one inversion on.
