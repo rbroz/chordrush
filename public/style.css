@@ -48,6 +48,9 @@ body {
 .filterbar { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line);
              border-radius:12px; padding:5px; margin-top:7vh; }
 .filterbar.locked { opacity:.4; pointer-events:none; }
+.filterbars { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; }
+.dash-section .filterbars { margin:0 auto 20px; }
+.dash-section .filterbars .filterbar { margin:0; }
 .filter { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent; border:0;
           border-radius:8px; padding:7px 16px; cursor:pointer; transition:color .12s, background .12s, box-shadow .12s; }
 .filter:hover { color:var(--text); }
