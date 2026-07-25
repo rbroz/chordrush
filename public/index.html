@@ -34,6 +34,14 @@
 </script>
 
 <link rel="stylesheet" href="/style.css">
+<style>
+  #unsupportedModal .modal { max-width: 400px; text-align: left; }
+  .us-lead { margin: 0 0 16px; line-height: 1.5; }
+  .us-need { margin: 0 0 6px; font-weight: 600; }
+  .us-list { list-style: none; padding: 0; margin: 0 0 16px; }
+  .us-list li { padding: 3px 0; }
+  .us-note { color: #888; font-size: 14px; line-height: 1.5; margin: 0; }
+</style>
 </head>
 <body>
 
@@ -95,6 +103,20 @@
       <div class="board-empty" id="boardEmpty">no times yet</div>
     </div>
   </main>
+
+  <div class="modal-overlay" id="unsupportedModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="usClose" aria-label="Close">&times;</button>
+      <h2 class="modal-title">Play ChordRush on desktop 🎹</h2>
+      <p class="us-lead">Race through the piano chords on your MIDI keyboard and beat your best time.</p>
+      <p class="us-need">To play, you'll need:</p>
+      <ul class="us-list">
+        <li>🎹&nbsp;&nbsp;a MIDI keyboard</li>
+        <li>💻&nbsp;&nbsp;Chrome or Edge on a computer</li>
+      </ul>
+      <p class="us-note">This browser can't access MIDI — open <b>chordrush.app</b> in Chrome on a desktop to play.</p>
+    </div>
+  </div>
 
   <div class="modal-overlay" id="authModal" hidden>
     <div class="modal">
@@ -245,7 +267,7 @@ const setMsg=(t,kind='')=>{ msg.textContent=t; msg.className='modal-msg'+(kind?'
 /* ---------- MIDI ---------- */
 async function initMidi(){
   errBox.style.display="none";
-  if(!navigator.requestMIDIAccess){ setStatus(false,"Web MIDI not supported — use Chrome/Edge"); return; }
+  if(!navigator.requestMIDIAccess){ setStatus(false,"Web MIDI not supported — use Chrome/Edge"); $("unsupportedModal").hidden=false; return; }
   try {
     midiAccess=await navigator.requestMIDIAccess({sysex:false});
     midiAccess.onstatechange=refreshDevices;
@@ -653,6 +675,8 @@ document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&p
 
 $('authClose').addEventListener('click', closeModal);
 modal.addEventListener('click', e => { if(e.target===modal) closeModal(); });
+$('usClose').onclick = () => { $('unsupportedModal').hidden = true; };
+$('unsupportedModal').addEventListener('click', e => { if(e.target===e.currentTarget) e.currentTarget.hidden = true; });
 document.addEventListener('keydown', e => { if(e.key==='Escape' && !modal.hidden) closeModal(); });
 modal.addEventListener('keydown', e => {   // Enter submits whichever form is showing
   if(e.key==='Enter'){ e.preventDefault(); (loginForm.hidden ? signupForm : loginForm).requestSubmit(); }
