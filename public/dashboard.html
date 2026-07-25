@@ -18,6 +18,7 @@
   .hm-legend { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px; font-size:12px; color:#999; }
   .hm-leg-bar { width:120px; height:10px; border-radius:5px; background:linear-gradient(to right, hsl(18,85%,90%), hsl(18,85%,45%)); }
   .hm-leg-range { color:#bbb; }
+  .hm-tip { position:fixed; z-index:20; pointer-events:none; background:#2b2b2b; color:#fff; font-size:12px; padding:5px 9px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-135%); }
 </style>
 </head>
 <body>
@@ -64,6 +65,7 @@
         <div id="heatmap"></div>
         <div class="chart-empty" id="hmEmpty" style="display:none;">no chord data yet — play a few runs</div>
         <div class="hm-legend" id="hmLegend"></div>
+        <div class="hm-tip" id="hmTip" style="display:none"></div>
       </div>
     </div>
   </main>
@@ -286,14 +288,26 @@ function renderHeatmap(){
       const cell=avg[root+' '+col.type+' '+col.inv];
       if(cell){
         const L=(90-((cell.ms-min)/span)*45).toFixed(0);   // pale (fast) → deep (slow), one hue
-        html+='<td style="background:hsl(18,85%,'+L+'%)" title="'+root+' '+col.type+' '+col.inv+' — '+(cell.ms/1000).toFixed(2)+'s avg (last '+cell.n+')"></td>';
+        html+='<td style="background:hsl(18,85%,'+L+'%)" data-tip="'+root+' '+col.type+' '+col.inv+' — '+(cell.ms/1000).toFixed(2)+'s avg (last '+cell.n+')"></td>';
       } else {
-        html+='<td title="'+root+' '+col.type+' '+col.inv+' — no runs yet"></td>';
+        html+='<td data-tip="'+root+' '+col.type+' '+col.inv+' — no runs yet"></td>';
       }
     }
     html+='</tr>';
   }
   el.innerHTML = html+'</tbody></table>';
+
+  // instant tooltip that follows the cursor, showing the chord + seconds
+  const tip=$('hmTip');
+  el.querySelectorAll('td[data-tip]').forEach(td=>{
+    td.addEventListener('mousemove', e=>{
+      tip.textContent=td.dataset.tip;
+      tip.style.left=e.clientX+'px';
+      tip.style.top=e.clientY+'px';
+      tip.style.display='block';
+    });
+    td.addEventListener('mouseleave', ()=>{ tip.style.display='none'; });
+  });
 
   legend.innerHTML='<span>faster</span><span class="hm-leg-bar"></span><span>slower</span>'
     +'<span class="hm-leg-range">('+(min/1000).toFixed(1)+'s–'+(max/1000).toFixed(1)+'s)</span>';
