@@ -127,9 +127,9 @@ body {
 .user-dropdown .dd-logout { color:var(--muted); border-top:1px solid var(--line); margin-top:3px; border-radius:0; }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(20,22,28,.45); display:flex;
-                 align-items:center; justify-content:center; padding:20px; z-index:50; }
+                 align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; z-index:50; }
 .modal-overlay[hidden] { display:none; }
-.modal { position:relative; width:100%; max-width:360px; background:var(--bg); border:1px solid var(--line);
+.modal { position:relative; width:100%; max-width:360px; margin:auto; background:var(--bg); border:1px solid var(--line);
          border-radius:16px; padding:28px; box-shadow:0 14px 44px rgba(0,0,0,.14); }
 .modal-title { font-size:20px; font-weight:700; margin:0 0 18px; text-align:center; }
 .modal-close { position:absolute; top:10px; right:14px; background:transparent; border:0; font-size:24px;

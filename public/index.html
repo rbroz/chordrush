@@ -15,9 +15,11 @@
 <meta property="og:url" content="https://chordrush.app/">
 <meta property="og:title" content="ChordRush — Chord Time Trial">
 <meta property="og:description" content="Connect your MIDI keyboard and race through the major and minor chords. Beat your best time. Free.">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://chordrush.app/demo-poster.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="ChordRush — Chord Time Trial">
 <meta name="twitter:description" content="Connect your MIDI keyboard and race through the major and minor chords. Beat your best time. Free.">
+<meta name="twitter:image" content="https://chordrush.app/demo-poster.jpg">
 
 <!-- Structured data -->
 <script type="application/ld+json">
@@ -36,11 +38,30 @@
 <link rel="stylesheet" href="/style.css">
 <style>
   #unsupportedModal .modal { max-width: 400px; text-align: left; }
+  .us-tabs { display: flex; gap: 4px; margin: 0 0 18px; padding: 4px; background: var(--panel);
+             border: 1px solid var(--line); border-radius: 12px; }
+  .us-tab { flex: 1; padding: 8px 10px; font-family: var(--mono); font-size: 13px; font-weight: 600;
+            color: var(--muted); background: transparent; border: 0; border-radius: 9px; cursor: pointer; }
+  .us-tab.active { color: #fff; background: var(--accent); }
+  .us-viewport { position: relative; overflow: hidden; touch-action: pan-y; }
+  .us-track { display: flex; align-items: stretch; transition: transform .25s ease; will-change: transform; }
+  .us-track.dragging { transition: none; }
+  .us-panel { flex: 0 0 100%; }
+  /* transparent layer over the panels that catches every swipe — iOS <video> can otherwise
+     intercept touches even with pointer-events:none */
+  .us-swipe-catch { position: absolute; inset: 0; z-index: 2; touch-action: pan-y; }
+  /* "How to play" is shorter than the demo — text pins to the top, the gif anchors the
+     bottom, and space-between fills the reserved stage height cleanly */
+  #usPanelHow { display: flex; flex-direction: column; justify-content: space-between; }
+  .us-pepe { align-self: center; width: 116px; height: auto; margin: 12px 0 0; pointer-events: none; -webkit-user-drag: none; }
+  .us-video { display: block; width: 100%; border-radius: 12px; margin: 0 0 12px; pointer-events: none; }
+  .us-cap { color: #888; font-size: 14px; line-height: 1.5; margin: 0; text-align: center; }
   .us-lead { margin: 0 0 16px; line-height: 1.5; }
   .us-need { margin: 0 0 6px; font-weight: 600; }
   .us-list { list-style: none; padding: 0; margin: 0 0 16px; }
   .us-list li { padding: 3px 0; }
-  .us-note { color: #888; font-size: 14px; line-height: 1.5; margin: 0; }
+  .us-warn { margin: 0 0 16px; padding: 11px 13px; background: #fff7e6; border: 1px solid #f2e2b3;
+             border-radius: 10px; font-size: 14px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -111,13 +132,29 @@
     <div class="modal">
       <button class="modal-close" id="usClose" aria-label="Close">&times;</button>
       <h2 class="modal-title">Play ChordRush on desktop 🎹</h2>
-      <p class="us-lead">Race through the piano chords on your MIDI keyboard and beat your best time.</p>
-      <p class="us-need">To play, you'll need:</p>
-      <ul class="us-list">
-        <li>🎹&nbsp;&nbsp;a MIDI keyboard</li>
-        <li>💻&nbsp;&nbsp;Chrome or Edge on a computer</li>
-      </ul>
-      <p class="us-note">This browser can't access MIDI — open <b>chordrush.app</b> in Chrome on a desktop to play.</p>
+      <div class="us-tabs" role="tablist">
+        <button class="us-tab active" data-tab="how" type="button">How to play</button>
+        <button class="us-tab" data-tab="demo" type="button">Demo</button>
+      </div>
+      <div class="us-viewport">
+        <div class="us-track" id="usTrack">
+          <div class="us-panel" id="usPanelHow">
+            <p class="us-warn">⚠️&nbsp;&nbsp;This browser can't access MIDI — open <b>chordrush.app</b> in Chrome on a desktop to play.</p>
+            <p class="us-lead">Race through the piano chords on your MIDI keyboard and beat your best time.</p>
+            <p class="us-need">To play, you'll need:</p>
+            <ul class="us-list">
+              <li>🎹&nbsp;&nbsp;a MIDI keyboard</li>
+              <li>💻&nbsp;&nbsp;Chrome or Edge on a computer</li>
+            </ul>
+            <img class="us-pepe" src="/pepe-piano.gif" alt="frog playing piano" width="124" height="124" loading="lazy">
+          </div>
+          <div class="us-panel" id="usPanelDemo">
+            <video class="us-video" src="/demo.mp4" poster="/demo-poster.jpg" muted loop playsinline preload="metadata"></video>
+            <p class="us-cap">7 seconds of ChordRush — race the clock on desktop.</p>
+          </div>
+        </div>
+        <div class="us-swipe-catch"></div>
+      </div>
     </div>
   </div>
 
@@ -763,6 +800,56 @@ $('authClose').addEventListener('click', closeModal);
 modal.addEventListener('click', e => { if(e.target===modal) closeModal(); });
 $('usClose').onclick = () => { $('unsupportedModal').hidden = true; };
 $('unsupportedModal').addEventListener('click', e => { if(e.target===e.currentTarget) e.currentTarget.hidden = true; });
+let usCurrent = 'how';
+function usSetTab(name){
+  usCurrent = name;
+  const showDemo = name === 'demo';
+  document.querySelectorAll('#unsupportedModal .us-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $('usTrack').style.transform = showDemo ? 'translateX(-100%)' : 'translateX(0)';
+  const v = document.querySelector('#unsupportedModal .us-video');
+  if(v){ if(showDemo) v.play().catch(()=>{}); else v.pause(); }
+}
+document.querySelectorAll('#unsupportedModal .us-tab').forEach(tab => {
+  tab.onclick = () => usSetTab(tab.dataset.tab);
+});
+// drag-to-swipe: the track follows your finger, then snaps to the nearest tab on release
+(function(){
+  const track = $('usTrack'), vp = track.parentElement, catcher = vp.querySelector('.us-swipe-catch');
+  let startX = 0, startY = 0, dragging = false, axis = null, base = 0, width = 0;
+  catcher.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    width = vp.clientWidth;
+    base = usCurrent === 'demo' ? -width : 0;
+    dragging = true; axis = null;
+    track.classList.add('dragging');
+  }, {passive:true});
+  catcher.addEventListener('touchmove', e => {
+    if(!dragging) return;
+    const t = e.touches[0], dx = t.clientX - startX, dy = t.clientY - startY;
+    if(axis === null){
+      if(Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if(axis === 'y') return;                              // vertical → let the modal scroll
+    e.preventDefault();                                   // horizontal → we own the gesture
+    let off = base + dx;
+    if(off > 0) off *= 0.3;                               // rubber-band past the edges
+    else if(off < -width) off = -width + (off + width) * 0.3;
+    track.style.transform = `translateX(${off}px)`;
+  }, {passive:false});
+  function end(e){
+    if(!dragging) return;
+    dragging = false;
+    track.classList.remove('dragging');                  // re-enable the snap transition
+    if(axis !== 'x'){ usSetTab(usCurrent); return; }
+    const dx = ((e.changedTouches && e.changedTouches[0]) || {clientX:startX}).clientX - startX;
+    const thr = width * 0.2;
+    usSetTab(dx < -thr ? 'demo' : dx > thr ? 'how' : usCurrent);
+  }
+  catcher.addEventListener('touchend', end, {passive:true});
+  catcher.addEventListener('touchcancel', end, {passive:true});
+})();
 document.addEventListener('keydown', e => { if(e.key==='Escape' && !modal.hidden) closeModal(); });
 modal.addEventListener('keydown', e => {   // Enter submits whichever form is showing
   if(e.key==='Enter'){ e.preventDefault(); (loginForm.hidden ? signupForm : loginForm).requestSubmit(); }
