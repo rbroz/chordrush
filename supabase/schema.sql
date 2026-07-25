@@ -26,8 +26,9 @@ create table public.scores (
   user_id     uuid not null references auth.users(id) on delete cascade,
   mode        text not null,                    -- e.g. 'major', 'minor', 'major+minor', 'major|1', 'major|1,2', 'major|any'
   time_ms     integer not null check (time_ms > 0),
-  chord_count smallint,                         -- 12 or 24, for context
+  chord_count smallint,                         -- 12 / 24 / 36 … depending on selected voicings, for context
   splits      jsonb,                            -- per-chord landing times, e.g. {"C major 1st": 920, "Eb minor root": null}; null = the run's start chord
+  device      text,                             -- MIDI controller name (input.name), e.g. "Yamaha P-45"; null for guests/older rows
   played_at   timestamptz,                      -- client run-finish time; unique per run (dedup key + true date)
   created_at  timestamptz not null default now()
 );

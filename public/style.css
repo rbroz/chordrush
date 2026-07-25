@@ -95,8 +95,9 @@ body {
 .board-list { list-style:none; margin:0; padding:0; }
 .board-list li { display:flex; align-items:center; gap:12px; padding:9px 6px; border-bottom:1px solid var(--line); font-size:15px; }
 .board-list li .rank { width:18px; text-align:left; color:var(--muted); }
-.board-list li .time { flex:1; text-align:left; color:var(--text); font-variant-numeric:tabular-nums; }
-.board-list li .date { color:var(--muted); font-size:12px; }
+.board-list li .time { text-align:left; color:var(--text); font-variant-numeric:tabular-nums; }
+.board-list li .avg { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.board-list li .date { color:var(--muted); font-size:12px; margin-left:auto; }
 .board-list li.top1 .rank, .board-list li.top1 .time { color:var(--accent); font-weight:700; }
 .board-list li.justset { background:rgba(34,197,94,.10); border-radius:8px; }
 .board-empty { color:var(--muted); font-size:13px; }

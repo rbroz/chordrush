@@ -8,6 +8,7 @@
 <meta name="description" content="Your ChordRush stats and progress.">
 <meta name="robots" content="noindex, follow">
 <link rel="canonical" href="https://chordrush.app/dashboard">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="stylesheet" href="/style.css">
 <style>
@@ -85,7 +86,7 @@ let mode = 'major';
 const TYPE_LABEL = { major:'majors', minor:'minors' };
 const INV_LABEL  = ['root','1st inv','2nd inv','3rd inv'];
 // Same selection model as the main page: toggle type(s) + inversion(s); the chosen
-// combination maps to a stored mode key (root-only → "major", all three → "major|any").
+// combination maps to a stored mode key (root-only → "major", else e.g. "major|0,1,2").
 const enabled    = { major:true, minor:false };
 const enabledInv = { 0:true, 1:false, 2:false };
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
@@ -94,7 +95,6 @@ function modeKey(){
   const t = enabledTypes().join('+');
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return t;
-  if(invs.length===3)                return t + '|any';
   return t + '|' + invs.join(',');
 }
 // Readable label for the chart's empty state ("major|1" → "majors · 1st inv").

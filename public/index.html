@@ -9,6 +9,7 @@
 <meta name="description" content="Race through all 12 major and minor chords on your MIDI keyboard and beat your best time. A free online piano chord trainer for building speed, accuracy, and muscle memory. Works in Chrome.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://chordrush.app/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <!-- Social link previews -->
 <meta property="og:type" content="website">
@@ -56,6 +57,7 @@
   .us-pepe { align-self: center; width: 116px; height: auto; margin: 12px 0 0; pointer-events: none; -webkit-user-drag: none; }
   .us-video { display: block; width: 100%; border-radius: 12px; margin: 0 0 12px; pointer-events: none; }
   .us-cap { color: #888; font-size: 14px; line-height: 1.5; margin: 0; text-align: center; }
+  .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
   .us-lead { margin: 0 0 16px; line-height: 1.5; }
   .us-need { margin: 0 0 6px; font-weight: 600; }
   .us-list { list-style: none; padding: 0; margin: 0 0 16px; }
@@ -217,7 +219,7 @@ const enabledInv = { 0:true, 1:false, 2:false };   // default = root only → th
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
 const INV_LABEL = ["root", "1st inv", "2nd inv", "3rd inv"];   // used by the board's mode label
 // inv = which chord tone is in the bass: 0 root, 1 first inv (3rd), 2 second inv (5th), 3 (7ths).
-// anyVoicing = accept any bass (all inversions on → "play it however").
+// anyVoicing = accept any bass (used by AI-built config tests, not the filter bar).
 function chordFor(r, type, inv=0, anyVoicing=false){
   const T = CHORD_TYPES[type];
   const pcs = T.ivals.map(i => (r.pc + i) % 12);
@@ -251,37 +253,31 @@ function buildOrder(config){
     }
     return out;
   }
-  // Filter-bar test: always one chord per (type × root) so run length stays fixed
-  // (12 per type). All inversions on → any voicing; a subset → each chord gets a
-  // RANDOM inversion from the selected set, so they're mixed in without lengthening.
+  // Filter-bar test: the FULL cross-product — every enabled type × every root × every
+  // selected voicing is its own chord. So majors × root+1st = 24, all three = 36.
   const invs = enabledInvs();
-  const anyVoicing = invs.length === 3;
   const list=[];
   for(const type of enabledTypes())
-    for(const r of ROOTS){
-      if(anyVoicing){ list.push(chordFor(r, type, 0, true)); continue; }
-      const inv = invs[Math.floor(Math.random()*invs.length)];   // random inversion for this chord
-      list.push(chordFor(r, type, inv));
-    }
+    for(const r of ROOTS)
+      for(const inv of invs)
+        list.push(chordFor(r, type, inv));
   return shuffled(list);
 }
 function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
 /* ---------- Mode (drives which leaderboard is active) ---------- */
 // ROOT-ONLY keeps the legacy key ("major" etc.) so the original leaderboard carries over.
-// All three on = "any voicing" (its own board); any other subset = an inversion drill.
+// Any other voicing set gets its own board (e.g. "major|0,1,2").
 function modeKey(){
   const t = enabledTypes().join("+");
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return t;        // root only → the classic board
-  if(invs.length===3)                return t + "|any";
-  return t + "|" + invs.join(",");
+  return t + "|" + invs.join(",");                    // any other voicing set → its own board
 }
 function modeLabel(){
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return types;
-  if(invs.length===3)                return types + " · any voicing";
   return types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
 }
 const MAX_TOP=5;
@@ -312,12 +308,25 @@ async function initMidi(){
     midiAccess=await navigator.requestMIDIAccess({sysex:false});
     midiAccess.onstatechange=refreshDevices;
     refreshDevices();
-  } catch(e){ setStatus(false,"MIDI access denied"); showErr("MIDI blocked. Allow MIDI for this page in Chrome and reload."); }
+  } catch(e){
+    console.error('MIDI init failed:', e);
+    const name = e && e.name;
+    if(name==='SecurityError' || name==='NotAllowedError'){
+      setStatus(false,"MIDI blocked");
+      showErr("MIDI is blocked for this page. Click the icon in your browser's address bar, allow MIDI, then hit reconnect.");
+    } else if(name==='InvalidStateError'){
+      setStatus(false,"MIDI engine stuck");
+      showErr("Your browser's MIDI engine got stuck — fully quit and reopen your browser, then hit reconnect. (A page refresh alone won't fix it.)");
+    } else {
+      setStatus(false,"MIDI unavailable");
+      showErr("Couldn't start MIDI. Try reconnect; if that fails, fully restart your browser. ("+(name||'unknown error')+")");
+    }
+  }
 }
 function refreshDevices(){
   const inputs=midiAccess?[...midiAccess.inputs.values()]:[];
   deviceSelect.innerHTML="";
-  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard detected"); currentInput=null; return; }
+  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard — plug in & reconnect"); currentInput=null; return; }
   inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
   deviceSelect.style.display = inputs.length>1 ? "" : "none";
   const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
@@ -555,7 +564,7 @@ async function finish(){
   const playedAt=new Date().toISOString();   // unique per run → dedup key + accurate date
   hTime.textContent=total.toFixed(2);
   playWrap.style.display="none"; doneWrap.style.display="block";
-  $("doneTotal").textContent=total.toFixed(2)+"s";
+  $("doneTotal").innerHTML=total.toFixed(2)+'s <span class="done-avg">'+(total/order.length).toFixed(2)+'s/chord</span>';
 
   // save the run (DB if logged in, else localStorage), then read back the fresh top 5
   await addScore(modeKey(), timeMs, order.length, playedAt, runSplits);
@@ -595,10 +604,10 @@ function flash(){ stage.classList.remove("flash-good"); void stage.offsetWidth; 
 async function getTop(mode){
   if(currentSession){
     const { data, error } = await supabase
-      .from('scores').select('time_ms, created_at, played_at')
+      .from('scores').select('time_ms, chord_count, created_at, played_at')
       .eq('mode', mode).order('time_ms', { ascending:true }).limit(MAX_TOP);
     if(error){ console.error('getTop', error); return []; }
-    return data.map(r => ({ t: r.time_ms/1000, d: r.played_at || r.created_at }));
+    return data.map(r => ({ t: r.time_ms/1000, d: r.played_at || r.created_at, c: r.chord_count }));
   }
   return localTop(mode);
 }
@@ -606,19 +615,19 @@ async function addScore(mode, timeMs, chordCount, playedAt, splits){
   if(currentSession){
     // played_at is the run's unique key; on conflict the DB ignores the dup
     const { error } = await supabase.from('scores').upsert(
-      { user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount, played_at: playedAt, splits },
+      { user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount, played_at: playedAt, splits, device: currentInput?.name || null },
       { onConflict:'user_id,played_at', ignoreDuplicates:true }
     );
     if(error) console.error('addScore', error);
   } else {
-    localAddScore(mode, timeMs, playedAt);   // guests: DB-only splits, so heatmap is a logged-in feature
+    localAddScore(mode, timeMs, playedAt, chordCount);   // guests: DB-only splits, so heatmap is a logged-in feature
   }
 }
 function localKey(mode){ return 'chordrushTop5:'+mode; }
 function localTop(mode){ try{ const a=JSON.parse(localStorage.getItem(localKey(mode))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function localAddScore(mode, timeMs, playedAt){
+function localAddScore(mode, timeMs, playedAt, chordCount){
   const arr=localTop(mode);
-  arr.push({ t:timeMs/1000, d:playedAt });   // d = finish time, becomes played_at on migration
+  arr.push({ t:timeMs/1000, d:playedAt, c:chordCount });   // d = finish time, becomes played_at on migration
   arr.sort((a,b)=>a.t-b.t);
   localStorage.setItem(localKey(mode), JSON.stringify(arr.slice(0,MAX_TOP)));
 }
@@ -630,10 +639,13 @@ function migrateLegacy(){   // old local keys → current local key (guest histo
   const oldBest=parseFloat(localStorage.getItem("majorRunBestV1")||"");
   if(!isNaN(oldBest)) localStorage.setItem(mk, JSON.stringify([{t:oldBest, d:new Date().toISOString()}]));
 }
-// chord count for a mode key: one chord per (type × root), fixed regardless of
-// inversions (they're mixed in, not stacked). "major"→12, "major+minor"→24.
+// chord count for a mode key: type × root × selected voicing. "major"→12,
+// "major|0,1"→24, "major+minor|0,1,2"→72. (Root-only has no "|" → 1 voicing.)
 function countForMode(mode){
-  return mode.split('|')[0].split('+').length * ROOTS.length;
+  const [typePart, invPart] = mode.split('|');
+  const types = typePart.split('+').length;
+  const invs  = invPart ? invPart.split(',').length : 1;
+  return types * ROOTS.length * invs;
 }
 // On login, move ALL guest (localStorage) boards into the account once, then clear them.
 async function migrateLocalToAccount(){
@@ -688,7 +700,8 @@ async function refreshBoard(justSetRank, prefetched){
     li.className=(i===0?"top1 ":"")+(i===justSetRank?"justset":"");
     let date="";
     try { date=new Date(e.d).toLocaleDateString(undefined,{month:"short",day:"numeric"}); } catch(err){}
-    li.innerHTML=`<span class="rank">${i+1}</span><span class="time">${e.t.toFixed(2)}s</span><span class="date">${date}</span>`;
+    const cc = e.c || countForMode(modeKey());
+    li.innerHTML=`<span class="rank">${i+1}</span><span class="time">${e.t.toFixed(2)}s</span><span class="avg">${(e.t/cc).toFixed(2)}/ch</span><span class="date">${date}</span>`;
     list.appendChild(li);
   });
 }
