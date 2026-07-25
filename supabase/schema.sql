@@ -24,9 +24,10 @@ create unique index profiles_username_lower_idx on public.profiles (lower(userna
 create table public.scores (
   id          bigint generated always as identity primary key,
   user_id     uuid not null references auth.users(id) on delete cascade,
-  mode        text not null,                    -- 'major' | 'minor' | 'major+minor'
+  mode        text not null,                    -- e.g. 'major', 'minor', 'major+minor', 'major|1', 'major|1,2', 'major|any'
   time_ms     integer not null check (time_ms > 0),
   chord_count smallint,                         -- 12 or 24, for context
+  splits      jsonb,                            -- per-chord landing times, e.g. {"C major 1st": 920, "Eb minor root": null}; null = the run's start chord
   played_at   timestamptz,                      -- client run-finish time; unique per run (dedup key + true date)
   created_at  timestamptz not null default now()
 );
