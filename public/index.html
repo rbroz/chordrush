@@ -41,6 +41,7 @@
   .us-list { list-style: none; padding: 0; margin: 0 0 16px; }
   .us-list li { padding: 3px 0; }
   .us-note { color: #888; font-size: 14px; line-height: 1.5; margin: 0; }
+  .filterbars { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; }
 </style>
 </head>
 <body>
@@ -59,17 +60,20 @@
       <span class="status-text" id="statusText">requesting MIDI…</span>
       <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
       <button id="reconnectBtn">reconnect</button>
+      <button id="soundBtn" type="button"></button>
     </div>
     <div class="err" id="errBox" style="display:none;"></div>
 
-    <div class="filterbar" id="filterbar">
-      <button class="filter" data-type="major">majors</button>
-      <button class="filter" data-type="minor">minors</button>
-    </div>
-    <div class="filterbar" id="invbar">
-      <button class="filter" data-inv="0">root</button>
-      <button class="filter" data-inv="1">1st inv</button>
-      <button class="filter" data-inv="2">2nd inv</button>
+    <div class="filterbars">
+      <div class="filterbar" id="filterbar">
+        <button class="filter" data-type="major">majors</button>
+        <button class="filter" data-type="minor">minors</button>
+      </div>
+      <div class="filterbar" id="invbar">
+        <button class="filter" data-inv="0">root</button>
+        <button class="filter" data-inv="1">1st inv</button>
+        <button class="filter" data-inv="2">2nd inv</button>
+      </div>
     </div>
 
     <div class="stage" id="stage">
@@ -293,8 +297,8 @@ function showErr(m){ errBox.textContent=m; errBox.style.display="block"; }
 
 function onMidi(ev){
   const [status,d1,d2]=ev.data, cmd=status&0xF0;
-  if(cmd===0x90&&d2>0) heldNotes.set(d1,d2);
-  else if(cmd===0x80||(cmd===0x90&&d2===0)) heldNotes.delete(d1);
+  if(cmd===0x90&&d2>0){ heldNotes.set(d1,d2); if(soundOn) playNote(d1,d2); }
+  else if(cmd===0x80||(cmd===0x90&&d2===0)){ heldNotes.delete(d1); stopNote(d1); }
   else return;
   renderHeld();
   if(phase==="ready"||phase==="running") checkMatch();
@@ -302,6 +306,86 @@ function onMidi(ev){
 function renderHeld(){
   const notes=[...heldNotes.keys()].sort((a,b)=>a-b);
   heldLine.textContent = notes.length ? notes.map(n=>NOTE_NAMES[n%12]).join("  ") : "";
+}
+
+/* ---------- Audio: real piano samples (with a synth fallback) so ANY MIDI device makes sound ---------- */
+let audioCtx=null, masterGain=null, piano=null;
+const voices=new Map();                                    // fallback synth voices: midi note -> {osc, g}
+let soundOn = localStorage.getItem('chordrushSound')!=='off';   // default on
+const instrument = 'acoustic_grand_piano';   // single voice for now (picker deferred)
+
+// Browsers block audio until a user gesture — create/resume inside one.
+function ensureAudio(){
+  if(!audioCtx){
+    const AC = window.AudioContext||window.webkitAudioContext;
+    if(!AC) return;
+    audioCtx = new AC();
+    masterGain = audioCtx.createGain(); masterGain.gain.value = 0.5;
+    const comp = audioCtx.createDynamicsCompressor();      // tame chord peaks (fallback synth)
+    masterGain.connect(comp); comp.connect(audioCtx.destination);
+    loadPiano();                                           // fetch real piano samples in the background
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+async function loadPiano(){
+  try {
+    const { Soundfont } = await import('https://esm.sh/smplr@0.16.0');
+    const p = new Soundfont(audioCtx, { instrument, kit: 'MusyngKite', volume: 90 });
+    await p.loaded();
+    piano = p;                                             // switch from synth → real piano once ready
+  } catch(e){ console.warn('piano samples unavailable — using the built-in synth', e); }
+}
+
+// Dispatch: real piano if loaded, else the synth fallback.
+function playNote(note, vel){
+  ensureAudio(); if(!audioCtx) return;
+  if(piano) piano.start({ note, velocity: vel });
+  else synthPlay(note, vel);
+}
+function stopNote(note){
+  if(piano) piano.stop(note);
+  synthStop(note, true);                                   // release any fallback voice too (no-op if none)
+}
+function stopAllNotes(){
+  if(piano) piano.stop();
+  for(const n of [...voices.keys()]) synthStop(n, true);
+}
+
+// --- fallback oscillator synth (plays until samples load, or if they fail) ---
+const midiToFreq = n => 440 * Math.pow(2, (n-69)/12);
+function synthPlay(note, vel){
+  synthStop(note, true);                                   // retrigger cleanly
+  const t = audioCtx.currentTime, freq = midiToFreq(note);
+  const osc = audioCtx.createOscillator(); osc.type='triangle'; osc.frequency.value=freq;
+  const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = Math.min(freq*7, 4500); lp.Q.value = 0.3;
+  const g = audioCtx.createGain();
+  const peak = 0.05 + 0.18*(vel/127);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t+0.008);
+  g.gain.setTargetAtTime(peak*0.4, t+0.02, 0.6);
+  osc.connect(lp); lp.connect(g); g.connect(masterGain); osc.start(t);
+  voices.set(note, {osc, g});
+}
+function synthStop(note, immediate){
+  const v = voices.get(note); if(!v || !audioCtx) return;
+  voices.delete(note);
+  const t = audioCtx.currentTime, rel = immediate ? 0.005 : 0.12;
+  v.g.gain.cancelScheduledValues(t);
+  v.g.gain.setValueAtTime(Math.max(v.g.gain.value, 0.0001), t);
+  v.g.gain.exponentialRampToValueAtTime(0.0001, t+rel);
+  v.osc.stop(t+rel+0.03);
+}
+
+function updateSoundBtn(){
+  const b=$("soundBtn"); if(!b) return;
+  b.textContent = soundOn ? "🔊 sound" : "🔇 muted";
+  b.title = "Turn off if your keyboard already makes its own sound";
+}
+function toggleSound(){
+  soundOn = !soundOn;
+  localStorage.setItem('chordrushSound', soundOn?'on':'off');
+  if(soundOn) ensureAudio(); else stopAllNotes();
+  updateSoundBtn();
 }
 
 /* ---------- Matching ---------- */
@@ -667,6 +751,9 @@ async function renderAuth(){
 
 /* ---------- Wire up ---------- */
 $("reconnectBtn").onclick=initMidi;
+$("soundBtn").onclick=toggleSound;
+document.addEventListener('pointerdown', ensureAudio, {once:true});   // unlock audio on first gesture
+document.addEventListener('keydown', ensureAudio, {once:true});
 deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
@@ -688,6 +775,7 @@ loginForm.addEventListener('submit', handleLogin);
 migrateLegacy();
 renderAuth().then(() => updateModeUI());
 syncStartBtn();
+updateSoundBtn();
 initMidi();
 </script>
 </body>
