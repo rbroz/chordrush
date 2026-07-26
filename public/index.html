@@ -541,7 +541,7 @@ function showChord(){ chordName.textContent=order[idx].name; scheduleHint(); }
 // so inversions read low→high). The threshold is far slower than any competitive pace
 // (~1s/chord), so racers never see it and waiting for it only ruins your own time. ---
 let hintTimer = null;
-const HINT_DELAY = 6000;
+const HINT_DELAY = 5000;
 function scheduleHint(){
   clearTimeout(hintTimer);
   const h = $("chordHint"); if(h) h.style.display = "none";
