@@ -93,6 +93,12 @@
 
   <main class="main">
     <div class="filterbars">
+      <div class="conn">
+        <span class="dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">requesting MIDI…</span>
+        <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
+        <button id="soundBtn" type="button"></button>
+      </div>
       <div class="filterbar" id="filterbar">
         <button class="filter" data-type="major">majors</button>
         <button class="filter" data-type="minor">minors</button>
@@ -102,45 +108,50 @@
         <button class="filter" data-inv="1">1st inv</button>
         <button class="filter" data-inv="2">2nd inv</button>
       </div>
-      <div class="conn">
-        <span class="dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">requesting MIDI…</span>
-        <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
-        <button id="soundBtn" type="button"></button>
-      </div>
     </div>
     <div class="err" id="errBox" style="display:none;"></div>
 
-    <div class="stage" id="stage">
-      <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
+    <div class="play-grid">
 
-      <div id="playWrap" style="display:none;">
-        <div class="prompt-label" id="promptLabel">play</div>
-        <div class="chord-name" id="chordName">—</div>
-        <div class="held" id="heldLine"></div>
+      <div class="panel panel-left">
         <div class="chord-hint" id="chordHint" style="display:none;"></div>
       </div>
 
-      <div id="doneWrap" style="display:none;">
-        <div class="prompt-label">finished</div>
-        <div class="done-total" id="doneTotal">—</div>
-        <div id="pbWrap"></div>
-        <div class="splits" id="splits"></div>
+      <div class="panel panel-center">
+        <div class="stage" id="stage">
+          <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
+
+          <div id="playWrap" style="display:none;">
+            <div class="chord-name" id="chordName">—</div>
+            <div class="prompt-label" id="promptLabel">play</div>
+            <div class="held" id="heldLine"></div>
+          </div>
+
+          <div id="doneWrap" style="display:none;">
+            <div class="prompt-label">finished</div>
+            <div class="done-total" id="doneTotal">—</div>
+            <div id="pbWrap"></div>
+            <div class="splits" id="splits"></div>
+          </div>
+        </div>
+
+        <button class="start-btn" id="startBtn">restart</button>
+
+        <div class="hud" id="hud" style="display:none;">
+          <span class="item"><b id="hTime">0.00</b><i>s</i></span>
+          <span class="item"><b id="hProg">1 / 12</b></span>
+          <span class="item"><i>best</i> <b id="hBest">—</b></span>
+        </div>
       </div>
-    </div>
 
-    <button class="start-btn" id="startBtn">start</button>
+      <div class="panel panel-right">
+        <div class="board" id="boardPanel">
+          <div class="board-title" id="boardTitle">Top 5</div>
+          <ol class="board-list" id="boardList"></ol>
+          <div class="board-empty" id="boardEmpty">no times yet</div>
+        </div>
+      </div>
 
-    <div class="hud" id="hud" style="display:none;">
-      <span class="item"><b id="hTime">0.00</b><i>s</i></span>
-      <span class="item"><b id="hProg">1 / 12</b></span>
-      <span class="item"><i>best</i> <b id="hBest">—</b></span>
-    </div>
-
-    <div class="board" id="boardPanel">
-      <div class="board-title" id="boardTitle">Top 5</div>
-      <ol class="board-list" id="boardList"></ol>
-      <div class="board-empty" id="boardEmpty">no times yet</div>
     </div>
   </main>
 
@@ -517,25 +528,24 @@ function showStage(){
     hTime.textContent=snap.timeText; hProg.textContent=snap.progText;
     phase="done";
   } else {
-    doneWrap.style.display="none"; playWrap.style.display="none";
-    idleMsg.style.display="block";
-    hud.style.display="none";
-    phase="idle";
+    start();     // no finished run for this mode → fresh "ready" state (chord + keys shown, clock idle)
   }
   syncStartBtn();
 }
 
 /* ---------- Game flow ---------- */
-function syncStartBtn(){ $("startBtn").textContent = phase==="running" ? "restart" : "start"; }
+function syncStartBtn(){
+  const b=$("startBtn"); b.textContent="restart";
+  b.style.display = (phase==="running"||phase==="done") ? "" : "none";   // only once the trial has begun
+}
 function start(){
-  if(!currentInput){ showErr("no MIDI device connected — plug one in"); return; }
   errBox.style.display="none";
   cancelAnimationFrame(rafId);   // kill any timer still running (e.g. restart mid-run) so loops don't stack
   order=buildOrder();
   idx=0; completions=[]; startTime=0; runSplits={}; phase="ready";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
   filterbar.classList.remove("locked"); invbar.classList.remove("locked");   // stays changeable until the clock starts
-  hud.style.display="flex";
+  hud.style.display="none";                 // timer stays hidden until the clock actually starts
   hTime.textContent="0.00"; hTime.classList.add("dim");
   hProg.textContent="1 / "+order.length;
   refreshBest();
@@ -543,23 +553,11 @@ function start(){
   showChord();
   syncStartBtn();
 }
-function showChord(){ chordName.textContent=order[idx].name; scheduleHint(); }
+function showChord(){ chordName.textContent=order[idx].name; renderHint(order[idx]); }
 
-// --- "stuck?" helper: after HINT_DELAY on one chord, reveal its notes (bass-first,
-// so inversions read low→high). The threshold is far slower than any competitive pace
-// (~1s/chord), so racers never see it and waiting for it only ruins your own time. ---
-let hintTimer = null;
-const HINT_DELAY = 5000;
-function scheduleHint(){
-  clearTimeout(hintTimer);
-  const h = $("chordHint"); if(h) h.style.display = "none";
-  if(phase !== "running") return;   // no hint on the pre-start go-signal chord — google it or restart for a new shuffle
-  hintTimer = setTimeout(() => renderHint(order[idx]), HINT_DELAY);
-}
-function clearHint(){
-  clearTimeout(hintTimer);
-  const h = $("chordHint"); if(h) h.style.display = "none";
-}
+// The keyboard is always shown for the current chord (renderHint); clearHint hides it,
+// e.g. on the finished screen where there's no current chord.
+function clearHint(){ const h = $("chordHint"); if(h) h.style.display = "none"; }
 // Renders a single-octave keyboard slice, anchored to the chord's bass with a ~2-key
 // lead-in (snapped to white edges) so the chord sits centered and reads low→high.
 const HINT_WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
@@ -608,7 +606,8 @@ function advance(){
     runSplits[splitKey(order[0], Math.min(...heldNotes.keys())%12)] = null;   // start chord — no landing time
     startTime=now; completions=[now]; phase="running";
     filterbar.classList.add("locked"); invbar.classList.add("locked");  // lock the pool now that the clock is running
-    syncStartBtn();                     // now running → button becomes "restart"
+    hud.style.display="flex";           // reveal the timer now that the clock is running
+    syncStartBtn();                     // reveal the restart button now that the trial has started
     hTime.classList.remove("dim");
     promptLabel.textContent="play";
     idx=1; hProg.textContent=(idx+1)+" / "+order.length; showChord();
@@ -857,7 +856,6 @@ async function renderAuth(){
         <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
         <div class="user-dropdown">
           <a href="/dashboard">My Dashboard</a>
-          <a href="/friends">Friends</a>
           <button class="dd-logout" id="logoutBtn">log out</button>
         </div>
       </div>`;
@@ -881,7 +879,7 @@ deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
-document.addEventListener("keydown",e=>{ if(e.code==="Space"&&phase!=="ready"&&phase!=="running"&&modal.hidden){ e.preventDefault(); start(); } });
+document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);
 modal.addEventListener('click', e => { if(e.target===modal) closeModal(); });
@@ -946,7 +944,7 @@ loginForm.addEventListener('submit', handleLogin);
 
 /* ---------- Init ---------- */
 migrateLegacy();
-renderAuth().then(() => updateModeUI());
+renderAuth().then(() => showStage());
 syncStartBtn();
 updateSoundBtn();
 initMidi();

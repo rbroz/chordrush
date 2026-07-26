@@ -29,6 +29,16 @@
       <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
       <span><span class="accent">Chord</span>Rush</span>
     </a>
+    <nav class="mode-nav">
+      <a class="mode-tab" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
+        <span>Time Trials</span>
+      </a>
+      <a class="mode-tab" href="/practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
+        <span>Practice</span>
+      </a>
+    </nav>
     <div class="nav-account" id="navAccount"></div>
   </header>
 
@@ -134,7 +144,6 @@ function renderNav(session){
         <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
         <div class="user-dropdown">
           <a href="/dashboard">My Dashboard</a>
-          <a href="/friends">Friends</a>
           <button class="dd-logout" id="logoutBtn">log out</button>
         </div>
       </div>`;
