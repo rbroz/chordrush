@@ -344,7 +344,7 @@ async function initMidi(){
 function refreshDevices(){
   const inputs=midiAccess?[...midiAccess.inputs.values()]:[];
   deviceSelect.innerHTML="";
-  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard — plug one in"); currentInput=null; return; }
+  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard connected"); currentInput=null; return; }
   inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
   deviceSelect.style.display = inputs.length>1 ? "" : "none";
   const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
