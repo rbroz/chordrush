@@ -20,8 +20,10 @@ body {
 }
 
 /* ---------- Nav ---------- */
-.nav { position:relative; display:flex; align-items:center; justify-content:space-between;
+.nav { position:relative; display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
        max-width:1120px; width:100%; margin:0 auto; padding:22px 30px; }
+.nav .brand { justify-self:start; }
+.nav .nav-account { justify-self:end; }
 .brand { display:flex; align-items:center; gap:9px; font-size:19px; font-weight:700;
          letter-spacing:-0.02em; text-decoration:none; color:var(--text); }
 .brand .logo { width:26px; height:26px; color:var(--accent); }
@@ -103,7 +105,7 @@ body {
 .board-empty { color:var(--muted); font-size:13px; }
 
 /* mode nav: Time Trials / Practice segmented toggle at the top of the page */
-.mode-nav { display:flex; justify-content:center; gap:6px; width:fit-content; margin:20px auto 4px;
+.mode-nav { display:flex; justify-content:center; gap:6px; width:fit-content; margin:0;
             padding:4px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
 .mode-tab { display:inline-flex; align-items:center; gap:7px; padding:8px 16px; border-radius:9px;
             color:var(--muted); font-size:14px; font-weight:600; text-decoration:none; cursor:pointer; }
@@ -220,6 +222,8 @@ body {
 
 @media (max-width:560px){
   .nav { padding:18px 18px; }
+  .mode-tab { padding:7px 10px; }
+  .mode-tab span { display:none; }   /* icons-only in the header on small screens */
   .tabs { gap:22px; }
   .stage { margin-top:5vh; }
   .dash-section .filterbar { flex-wrap:wrap; }
