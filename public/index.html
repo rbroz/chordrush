@@ -59,8 +59,9 @@
   .us-cap { color: #888; font-size: 14px; line-height: 1.5; margin: 0; text-align: center; }
   .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
   .site-footer { max-width: 620px; margin: 80px auto 40px; padding: 0 20px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
-  .chord-hint { margin-top: 14px; color: var(--muted); font-family: var(--mono); font-size: 16px; letter-spacing: .02em; animation: hintFade .35s ease; }
-  .chord-hint .hint-label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; opacity: .55; margin-right: 8px; }
+  .chord-hint { margin-top: 16px; display: flex; justify-content: center; animation: hintFade .35s ease; }
+  .hint-kbd { max-width: 100%; height: auto; }
+  .hint-kbd text { font-family: var(--mono); font-weight: 600; }
   @keyframes hintFade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
   .us-lead { margin: 0 0 16px; line-height: 1.5; }
   .us-need { margin: 0 0 6px; font-weight: 600; }
@@ -551,14 +552,44 @@ function clearHint(){
   clearTimeout(hintTimer);
   const h = $("chordHint"); if(h) h.style.display = "none";
 }
+// Renders a single-octave keyboard slice, anchored to the chord's bass with a ~2-key
+// lead-in (snapped to white edges) so the chord sits centered and reads low→high.
+const HINT_WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
+const HINT_ACCENT = "#5b7cfa";
+const hintIsWhite = a => HINT_WHITE.has(((a % 12) + 12) % 12);
+const hintPcName  = a => PC_NAME[((a % 12) + 12) % 12];
 function renderHint(chord){
   const el = $("chordHint");
   if(!chord || !el) return;
   const pcs = chord.pcs || [];
-  const bass = chord.bass != null ? chord.bass : pcs[0];
-  const bi = pcs.indexOf(bass);
-  const ordered = bi >= 0 ? pcs.slice(bi).concat(pcs.slice(0, bi)) : pcs;   // bass first → low→high
-  el.innerHTML = '<span class="hint-label">notes</span>' + ordered.map(pc => PC_NAME[pc]).join(" · ");
+  const bassPc = chord.bass != null ? chord.bass : pcs[0];
+  const bassAbs = bassPc + 24;                                             // headroom so the −2 lead-in stays positive
+  const lit = new Set(pcs.map(pc => bassAbs + ((pc - bassPc + 12) % 12))); // chord tones ascending from the bass
+  const topAbs = Math.max(...lit);
+  let startAbs = bassAbs - 2; while(!hintIsWhite(startAbs)) startAbs--;     // ~2 below bass, snapped to a white edge
+  let endAbs   = topAbs + 2;  while(!hintIsWhite(endAbs))   endAbs++;
+
+  const W = 24, H = 96, BW = 15, BH = 60;
+  const whites = [];
+  for(let a = startAbs; a <= endAbs; a++) if(hintIsWhite(a)) whites.push(a);
+  const width = whites.length * W;
+  const wIndex = {}; whites.forEach((a, i) => wIndex[a] = i);
+
+  let s = `<svg class="hint-kbd" viewBox="0 0 ${width} ${H}" width="${width}" height="${H}" role="img" aria-label="keys to play">`;
+  whites.forEach((a, i) => {                                               // white keys
+    const on = lit.has(a);
+    s += `<rect x="${i*W}" y="0" width="${W-1}" height="${H}" rx="3" fill="${on?HINT_ACCENT:'#ffffff'}" stroke="#dcdce3"/>`;
+    if(on) s += `<text x="${i*W + W/2}" y="${H-9}" text-anchor="middle" font-size="9" fill="#ffffff">${hintPcName(a)}</text>`;
+  });
+  for(let a = startAbs; a <= endAbs; a++){                                 // black keys on top
+    if(hintIsWhite(a)) continue;
+    const x = (wIndex[a-1] + 1) * W - BW/2;
+    const on = lit.has(a);
+    s += `<rect x="${x}" y="0" width="${BW}" height="${BH}" rx="2" fill="${on?HINT_ACCENT:'#2a2a30'}"/>`;
+    if(on) s += `<text x="${x + BW/2}" y="${BH-7}" text-anchor="middle" font-size="8" fill="#ffffff">${hintPcName(a)}</text>`;
+  }
+  s += `</svg>`;
+  el.innerHTML = s;
   el.style.display = "block";
 }
 
