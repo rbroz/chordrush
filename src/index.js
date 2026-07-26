@@ -10,6 +10,15 @@ export default {
       return handleLogin(request, env);
     }
 
+    // Google Search Console verification — served explicitly so the ".html" URL
+    // resolves (static-asset html_handling otherwise maps *.html to extensionless,
+    // 404-ing the exact path Google checks).
+    if (url.pathname === "/google850514763900fa02.html") {
+      return new Response("google-site-verification: google850514763900fa02.html", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
     // everything else → the static site (index.html, style.css, etc.)
     return env.ASSETS.fetch(request);
   },
