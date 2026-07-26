@@ -107,10 +107,9 @@ body {
 /* mode nav: Time Trials / Practice segmented toggle at the top of the page */
 .mode-nav { display:flex; justify-content:center; gap:26px; width:fit-content; margin:0; }
 .mode-tab { display:inline-flex; align-items:center; gap:7px; padding:0;
-            color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; cursor:pointer; }
+            color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; cursor:pointer; transition:color .12s; }
 .mode-tab svg { width:17px; height:17px; }
-.mode-tab.active { color:var(--accent); }
-.mode-tab:not(.active):hover { color:var(--text); }
+.mode-tab:hover { color:var(--accent); }
 .practice-placeholder { text-align:center; color:var(--muted); font-size:16px; margin-top:12vh; }
 
 /* ---------- Placeholder pages ---------- */
