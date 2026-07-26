@@ -544,6 +544,7 @@ const HINT_DELAY = 6000;
 function scheduleHint(){
   clearTimeout(hintTimer);
   const h = $("chordHint"); if(h) h.style.display = "none";
+  if(phase !== "running") return;   // no hint on the pre-start go-signal chord — google it or restart for a new shuffle
   hintTimer = setTimeout(() => renderHint(order[idx]), HINT_DELAY);
 }
 function clearHint(){
