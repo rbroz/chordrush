@@ -106,7 +106,6 @@
         <span class="dot" id="statusDot"></span>
         <span class="status-text" id="statusText">requesting MIDI…</span>
         <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
-        <button id="reconnectBtn">reconnect</button>
         <button id="soundBtn" type="button"></button>
       </div>
     </div>
@@ -332,20 +331,20 @@ async function initMidi(){
     const name = e && e.name;
     if(name==='SecurityError' || name==='NotAllowedError'){
       setStatus(false,"MIDI blocked");
-      showErr("MIDI is blocked for this page. Click the icon in your browser's address bar, allow MIDI, then hit reconnect.");
+      showErr("MIDI is blocked for this page. Click the icon in your browser's address bar, allow MIDI, then reload.");
     } else if(name==='InvalidStateError'){
       setStatus(false,"MIDI engine stuck");
-      showErr("Your browser's MIDI engine got stuck — fully quit and reopen your browser, then hit reconnect. (A page refresh alone won't fix it.)");
+      showErr("Your browser's MIDI engine got stuck — fully quit and reopen your browser. (A page refresh alone won't fix it.)");
     } else {
       setStatus(false,"MIDI unavailable");
-      showErr("Couldn't start MIDI. Try reconnect; if that fails, fully restart your browser. ("+(name||'unknown error')+")");
+      showErr("Couldn't start MIDI. Try reloading; if that fails, fully restart your browser. ("+(name||'unknown error')+")");
     }
   }
 }
 function refreshDevices(){
   const inputs=midiAccess?[...midiAccess.inputs.values()]:[];
   deviceSelect.innerHTML="";
-  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard — plug in & reconnect"); currentInput=null; return; }
+  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard — plug one in"); currentInput=null; return; }
   inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
   deviceSelect.style.display = inputs.length>1 ? "" : "none";
   const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
@@ -442,7 +441,7 @@ function synthStop(note, immediate){
 
 function updateSoundBtn(){
   const b=$("soundBtn"); if(!b) return;
-  b.textContent = soundOn ? "🔊 sound" : "🔇 muted";
+  b.textContent = soundOn ? "🔊" : "🔇";
   b.title = "Turn off if your keyboard already makes its own sound";
 }
 function toggleSound(){
@@ -529,7 +528,7 @@ function showStage(){
 /* ---------- Game flow ---------- */
 function syncStartBtn(){ $("startBtn").textContent = phase==="running" ? "restart" : "start"; }
 function start(){
-  if(!currentInput){ showErr("no MIDI device connected — click reconnect"); return; }
+  if(!currentInput){ showErr("no MIDI device connected — plug one in"); return; }
   errBox.style.display="none";
   cancelAnimationFrame(rafId);   // kill any timer still running (e.g. restart mid-run) so loops don't stack
   order=buildOrder();
@@ -875,7 +874,6 @@ async function renderAuth(){
 }
 
 /* ---------- Wire up ---------- */
-$("reconnectBtn").onclick=initMidi;
 $("soundBtn").onclick=toggleSound;
 document.addEventListener('pointerdown', ensureAudio, {once:true});   // unlock audio on first gesture
 document.addEventListener('keydown', ensureAudio, {once:true});
