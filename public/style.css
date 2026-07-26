@@ -48,9 +48,9 @@ body {
 .err { color:var(--bad); font-size:13px; margin-top:12px; }
 
 .filterbar { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line);
-             border-radius:12px; padding:5px; margin-top:7vh; }
+             border-radius:12px; padding:5px; }
 .filterbar.locked { opacity:.4; pointer-events:none; }
-.filterbars { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; }
+.filterbars { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:7vh; }
 .dash-section .filterbars { margin:0 auto 20px; }
 .dash-section .filterbars .filterbar { margin:0; }
 .filter { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent; border:0;
