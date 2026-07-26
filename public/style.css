@@ -102,6 +102,16 @@ body {
 .board-list li.justset { background:rgba(34,197,94,.10); border-radius:8px; }
 .board-empty { color:var(--muted); font-size:13px; }
 
+/* mode nav: Time Trials / Practice segmented toggle at the top of the page */
+.mode-nav { display:flex; justify-content:center; gap:6px; width:fit-content; margin:20px auto 4px;
+            padding:4px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+.mode-tab { display:inline-flex; align-items:center; gap:7px; padding:8px 16px; border-radius:9px;
+            color:var(--muted); font-size:14px; font-weight:600; text-decoration:none; cursor:pointer; }
+.mode-tab svg { width:17px; height:17px; }
+.mode-tab.active { color:#fff; background:var(--accent); }
+.mode-tab:not(.active):hover { color:var(--text); }
+.practice-placeholder { text-align:center; color:var(--muted); font-size:16px; margin-top:12vh; }
+
 /* ---------- Placeholder pages ---------- */
 .soon { margin-top:14vh; display:flex; flex-direction:column; align-items:center; gap:10px; }
 .soon .emoji { font-size:44px; }
