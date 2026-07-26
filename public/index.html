@@ -59,6 +59,9 @@
   .us-cap { color: #888; font-size: 14px; line-height: 1.5; margin: 0; text-align: center; }
   .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
   .site-footer { max-width: 620px; margin: 80px auto 40px; padding: 0 20px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .chord-hint { margin-top: 14px; color: var(--muted); font-family: var(--mono); font-size: 16px; letter-spacing: .02em; animation: hintFade .35s ease; }
+  .chord-hint .hint-label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; opacity: .55; margin-right: 8px; }
+  @keyframes hintFade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
   .us-lead { margin: 0 0 16px; line-height: 1.5; }
   .us-need { margin: 0 0 6px; font-weight: 600; }
   .us-list { list-style: none; padding: 0; margin: 0 0 16px; }
@@ -106,6 +109,7 @@
         <div class="prompt-label" id="promptLabel">play</div>
         <div class="chord-name" id="chordName">—</div>
         <div class="held" id="heldLine"></div>
+        <div class="chord-hint" id="chordHint" style="display:none;"></div>
       </div>
 
       <div id="doneWrap" style="display:none;">
@@ -530,7 +534,32 @@ function start(){
   showChord();
   syncStartBtn();
 }
-function showChord(){ chordName.textContent=order[idx].name; }
+function showChord(){ chordName.textContent=order[idx].name; scheduleHint(); }
+
+// --- "stuck?" helper: after HINT_DELAY on one chord, reveal its notes (bass-first,
+// so inversions read low→high). The threshold is far slower than any competitive pace
+// (~1s/chord), so racers never see it and waiting for it only ruins your own time. ---
+let hintTimer = null;
+const HINT_DELAY = 6000;
+function scheduleHint(){
+  clearTimeout(hintTimer);
+  const h = $("chordHint"); if(h) h.style.display = "none";
+  hintTimer = setTimeout(() => renderHint(order[idx]), HINT_DELAY);
+}
+function clearHint(){
+  clearTimeout(hintTimer);
+  const h = $("chordHint"); if(h) h.style.display = "none";
+}
+function renderHint(chord){
+  const el = $("chordHint");
+  if(!chord || !el) return;
+  const pcs = chord.pcs || [];
+  const bass = chord.bass != null ? chord.bass : pcs[0];
+  const bi = pcs.indexOf(bass);
+  const ordered = bi >= 0 ? pcs.slice(bi).concat(pcs.slice(0, bi)) : pcs;   // bass first → low→high
+  el.innerHTML = '<span class="hint-label">notes</span>' + ordered.map(pc => PC_NAME[pc]).join(" · ");
+  el.style.display = "block";
+}
 
 function advance(){
   const now=performance.now();
@@ -561,6 +590,7 @@ function tick(){
 
 async function finish(){
   cancelAnimationFrame(rafId);
+  clearHint();
   phase="done";
   syncStartBtn();
   filterbar.classList.remove("locked"); invbar.classList.remove("locked");
