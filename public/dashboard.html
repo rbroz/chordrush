@@ -74,7 +74,7 @@
       </div>
 
       <div class="dash-section">
-        <div class="dash-title">chord speed · avg of your last 5</div>
+        <div class="dash-title">chord speed · all-time avg</div>
         <div id="heatmap"></div>
         <div class="chart-empty" id="hmEmpty" style="display:none;">no chord data yet — play a few runs</div>
         <div class="hm-legend" id="hmLegend"></div>
@@ -277,12 +277,12 @@ function renderHeatmap(){
       (samples[k] || (samples[k]=[])).push(ms);
     }
   }
-  // Average each chord's last 5 landings.
+  // Average ALL of each chord's landings (all-time). // TODO: add a last-5 / lifetime toggle later
   const avg={}; let min=Infinity, max=-Infinity, any=false;
   for(const k in samples){
-    const last5=samples[k].slice(-5);
-    const a=last5.reduce((s,x)=>s+x,0)/last5.length;
-    avg[k]={ms:a, n:last5.length}; any=true;
+    const all=samples[k];
+    const a=all.reduce((s,x)=>s+x,0)/all.length;
+    avg[k]={ms:a, n:all.length}; any=true;
     if(a<min) min=a; if(a>max) max=a;
   }
   if(!any){ el.innerHTML=''; legend.innerHTML=''; empty.style.display='block'; return; }
@@ -299,7 +299,7 @@ function renderHeatmap(){
       const cell=avg[root+' '+col.type+' '+col.inv];
       if(cell){
         const L=(90-((cell.ms-min)/span)*45).toFixed(0);   // pale (fast) → deep (slow), one hue
-        html+='<td style="background:hsl(18,85%,'+L+'%)" data-tip="'+root+' '+col.type+' '+col.inv+' — '+(cell.ms/1000).toFixed(2)+'s avg (last '+cell.n+')"></td>';
+        html+='<td style="background:hsl(18,85%,'+L+'%)" data-tip="'+root+' '+col.type+' '+col.inv+' — '+(cell.ms/1000).toFixed(2)+'s avg ('+cell.n+' plays)"></td>';
       } else {
         html+='<td data-tip="'+root+' '+col.type+' '+col.inv+' — no runs yet"></td>';
       }
