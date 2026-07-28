@@ -149,7 +149,7 @@ function renderNav(session){
       </div>`;
     $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.href='/'; };
   } else {
-    nav.innerHTML = `<a class="nav-btn" href="/">log in</a>`;
+    nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
 

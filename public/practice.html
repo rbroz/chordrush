@@ -5,12 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Practice — ChordRush</title>
-<meta name="description" content="Practice piano chords at your own pace on ChordRush.">
+<meta name="description" content="Drill your weakest piano chords on ChordRush.">
 <meta name="robots" content="noindex, follow">
 <link rel="canonical" href="https://chordrush.app/practice">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="stylesheet" href="/style.css">
+<style>
+  [hidden] { display: none !important; }   /* beat class rules like .prac-drill{display:flex} */
+  .hint-kbd { max-width: 100%; height: auto; }
+  .hint-kbd text { font-family: var(--mono); font-weight: 600; }
+  a.start-btn { display: inline-block; text-decoration: none; }
+  .prac-msg { max-width: 460px; margin: 14vh auto 0; }
+  .prac-msg p { color: var(--muted); font-size: 16px; line-height: 1.5; margin: 14px 0 0; }
+  .prac-intro { margin-top: 8vh; }
+  .struggle-row { display: flex; justify-content: center; gap: 32px; flex-wrap: wrap; margin: 22px 0 30px; }
+  .struggle-card { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .struggle-card .nm { font-family: var(--mono); font-weight: 600; font-size: 16px; color: var(--text); }
+  .struggle-card .sp { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .prac-drill { margin-top: 6vh; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  #pracKbd { min-height: 96px; }
+  .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); }
+  #pracDone { margin-top: 12vh; }
+  .goal-ctrl { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 4px 0 28px; }
+  .goal-lab { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .goal-stepper { display: inline-flex; align-items: center; gap: 16px; }
+  .goal-stepper button { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--panel); border-radius: 9px; font-size: 20px; line-height: 1; color: var(--text); cursor: pointer; }
+  .goal-stepper button:hover { border-color: var(--accent); color: var(--accent); }
+  #goalVal { font-family: var(--mono); font-weight: 700; font-size: 22px; min-width: 66px; text-align: center; color: var(--text); }
+  .keys-toggle { font-family: var(--mono); font-size: 14px; color: var(--accent); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; margin-bottom: 26px; }
+  .keys-toggle.off { color: var(--muted); }
+  .keys-toggle:hover { border-color: var(--accent); }
+  .drill-btns { display: flex; gap: 18px; align-items: center; }
+  .drill-back { font-family: var(--mono); font-size: 14px; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+  .drill-back:hover { color: var(--accent); }
+</style>
 </head>
 <body>
 
@@ -33,10 +62,351 @@
   </header>
 
   <main class="main">
-    <div class="practice-placeholder">
-      <p>Practice mode is coming soon 🎹</p>
+
+    <!-- logged out -->
+    <div class="prac-msg" id="pracGate" hidden>
+      <div class="prompt-label">practice mode</div>
+      <p>Log in to drill your weakest chords.</p>
+      <button class="start-btn" id="gateLogin">log in →</button>
     </div>
+
+    <!-- not enough data -->
+    <div class="prac-msg" id="pracEmpty" hidden>
+      <div class="prompt-label">practice mode</div>
+      <p>Play a few Time Trials first so we know which chords to drill for you.</p>
+      <a class="start-btn" href="/">play Time Trials →</a>
+    </div>
+
+    <!-- intro: your struggle chords + start -->
+    <div class="prac-intro" id="pracIntro" hidden>
+      <div class="conn" style="justify-content:center; margin-bottom:30px;">
+        <span class="dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">connecting…</span>
+      </div>
+      <div class="goal-ctrl">
+        <span class="goal-lab">goal · seconds per chord</span>
+        <div class="goal-stepper">
+          <button type="button" id="goalDown" aria-label="lower goal">−</button>
+          <span id="goalVal">2.0</span>
+          <button type="button" id="goalUp" aria-label="raise goal">+</button>
+        </div>
+      </div>
+      <button type="button" class="keys-toggle" id="keysToggle">🎹 key hints: on</button>
+      <div class="prompt-label">your toughest chords</div>
+      <div class="struggle-row" id="struggleRow"></div>
+      <button class="start-btn" id="drillStart">start drill</button>
+    </div>
+
+    <!-- the drill -->
+    <div class="prac-drill" id="pracDrill" hidden>
+      <div id="pracKbd"></div>
+      <div class="chord-name" id="pracChord">—</div>
+      <div class="hud" style="display:flex;">
+        <span class="item"><b id="pracAvg">—</b><i>s/ch · last 5</i></span>
+        <span class="item"><b id="pracReps">0</b><i>reps</i></span>
+      </div>
+      <div class="prompt-label" id="drillGoal">goal: last-5 avg under 2.0s/chord</div>
+      <div class="drill-btns">
+        <button class="start-btn" id="drillRestart">restart</button>
+        <button class="drill-back" id="drillBack">← back</button>
+      </div>
+    </div>
+
+    <!-- done -->
+    <div id="pracDone" hidden>
+      <div class="prompt-label">drill complete 🎉</div>
+      <div class="done-total" id="pracTotal">—</div>
+      <button class="start-btn" id="drillAgain">next</button>
+    </div>
+
   </main>
 
+  <div class="modal-overlay" id="authModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="authClose" aria-label="Close">&times;</button>
+      <h2 class="modal-title" id="authTitle">Log in</h2>
+      <form id="loginForm" novalidate>
+        <input id="liId" placeholder="username or email" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <input id="liPassword" type="password" placeholder="password" autocomplete="current-password">
+        <button type="submit" class="modal-submit" id="loginSubmit">log in</button>
+      </form>
+      <form id="signupForm" novalidate hidden>
+        <input id="suUsername" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <input id="suEmail" type="email" placeholder="email" autocomplete="email" autocapitalize="none">
+        <input id="suPassword" type="password" placeholder="password" autocomplete="new-password">
+        <input id="suConfirm" type="password" placeholder="confirm password" autocomplete="new-password">
+        <button type="submit" class="modal-submit" id="signupSubmit">create account</button>
+      </form>
+      <div class="modal-msg" id="authMsg"></div>
+      <div class="modal-switch" id="authSwitch"></div>
+    </div>
+  </div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+
+/* ---------- chord model (duplicated from Time Trials — DRY later) ---------- */
+const ROOTS = [
+  {name:"C",pc:0},{name:"C♯",pc:1},{name:"D",pc:2},{name:"E♭",pc:3},
+  {name:"E",pc:4},{name:"F",pc:5},{name:"F♯",pc:6},{name:"G",pc:7},
+  {name:"A♭",pc:8},{name:"A",pc:9},{name:"B♭",pc:10},{name:"B",pc:11},
+];
+const CHORD_TYPES = { major:{suffix:" Major",sym:"",ivals:[0,4,7]}, minor:{suffix:" minor",sym:"m",ivals:[0,3,7]} };
+const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
+const ROOT_BY_NAME = {}; ROOTS.forEach(r => ROOT_BY_NAME[r.name] = r);
+const INV_KEY = ['root','1st','2nd','3rd'];
+function chordFor(r, type, inv){
+  const T = CHORD_TYPES[type];
+  const pcs = T.ivals.map(i => (r.pc + i) % 12);
+  if(!inv) return { name:r.name+T.suffix, type, inv:0, pcs, bass:r.pc };
+  const bass = (r.pc + T.ivals[inv]) % 12;
+  return { name:r.name+T.sym+"/"+PC_NAME[bass], type, inv, pcs, bass };
+}
+// "A♭ major 1st" → chord object (matches Time Trials' splitKey format)
+function chordFromKey(key){
+  const p = key.split(' ');
+  if(p.length < 3) return null;
+  const inv = INV_KEY.indexOf(p[p.length-1]);
+  const type = p[p.length-2];
+  const r = ROOT_BY_NAME[p.slice(0, p.length-2).join(' ')];
+  if(!r || !CHORD_TYPES[type] || inv < 0) return null;
+  return chordFor(r, type, inv);
+}
+
+/* ---------- keyboard visual (duplicated from Time Trials) ---------- */
+const WHITE = new Set([0,2,4,5,7,9,11]), ACCENT = "#5b7cfa";
+const isW = a => WHITE.has(((a%12)+12)%12), nm = a => PC_NAME[((a%12)+12)%12];
+function keyboardSVG(chord){
+  const pcs = chord.pcs, bassPc = chord.bass!=null?chord.bass:pcs[0], bassAbs = bassPc+24;
+  const lit = new Set(pcs.map(pc => bassAbs + ((pc-bassPc+12)%12))), top = Math.max(...lit);
+  let sA = bassAbs-2; while(!isW(sA)) sA--;
+  let eA = top+2;     while(!isW(eA)) eA++;
+  const W=24,H=96,BW=15,BH=60, whites=[];
+  for(let a=sA;a<=eA;a++) if(isW(a)) whites.push(a);
+  const width = whites.length*W, wI={}; whites.forEach((a,i)=>wI[a]=i);
+  let s = `<svg class="hint-kbd" viewBox="0 0 ${width} ${H}" width="${width}" height="${H}">`;
+  whites.forEach((a,i)=>{ const on=lit.has(a);
+    s += `<rect x="${i*W}" y="0" width="${W-1}" height="${H}" rx="3" fill="${on?ACCENT:'#ffffff'}" stroke="#dcdce3"/>`;
+    if(on) s += `<text x="${i*W+W/2}" y="${H-9}" text-anchor="middle" font-size="9" fill="#ffffff">${nm(a)}</text>`;
+  });
+  for(let a=sA;a<=eA;a++){ if(isW(a)) continue;
+    const x=(wI[a-1]+1)*W-BW/2, on=lit.has(a);
+    s += `<rect x="${x}" y="0" width="${BW}" height="${BH}" rx="2" fill="${on?ACCENT:'#2a2a30'}"/>`;
+    if(on) s += `<text x="${x+BW/2}" y="${BH-7}" text-anchor="middle" font-size="8" fill="#ffffff">${nm(a)}</text>`;
+  }
+  return s + `</svg>`;
+}
+
+/* ---------- account nav (same as dashboard) ---------- */
+function renderNav(session){
+  const nav = $('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.href='/'; };
+  } else {
+    nav.innerHTML = `<button class="nav-btn" id="authBtn">log in</button>`;
+    $('authBtn').onclick = () => openModal('login');
+  }
+}
+
+/* ---------- auth modal (login / signup) — brought over from Time Trials ---------- */
+const authModal=$("authModal"), authMsg=$("authMsg"), loginForm=$("loginForm"), signupForm=$("signupForm");
+const setMsg=(t,kind='')=>{ authMsg.textContent=t; authMsg.className='modal-msg'+(kind?' '+kind:''); };
+function setAuthMode(mode){
+  const login = mode==='login';
+  $('authTitle').textContent = login ? 'Log in' : 'Create account';
+  loginForm.hidden=!login; signupForm.hidden=login;
+  $('authSwitch').innerHTML = login ? `Need an account? <a id="toSignup">Sign up</a>` : `Have an account? <a id="toLogin">Log in</a>`;
+  $(login?'toSignup':'toLogin').onclick = () => { setMsg(''); setAuthMode(login?'signup':'login'); };
+  setMsg('');
+}
+function openModal(mode='login'){ setAuthMode(mode); authModal.hidden=false; $(mode==='login'?'liId':'suUsername').focus(); }
+function closeModal(){ authModal.hidden=true; setMsg(''); }
+async function handleSignup(e){
+  e.preventDefault();
+  const username=$('suUsername').value.trim(), email=$('suEmail').value.trim();
+  const password=$('suPassword').value, confirm=$('suConfirm').value;
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(username)) return setMsg('Username: 3–20 letters, numbers, or _','error');
+  if(!email) return setMsg('Enter your email','error');
+  if(password.length<6) return setMsg('Password must be at least 6 characters','error');
+  if(password!==confirm) return setMsg('Passwords do not match','error');
+  const submit=$('signupSubmit'); submit.disabled=true; setMsg('Creating account…');
+  const pattern=username.replace(/[\\%_]/g,'\\$&');
+  const { data:existing, error:checkErr } = await supabase.from('profiles').select('id').ilike('username',pattern).limit(1);
+  if(checkErr){ submit.disabled=false; return setMsg('Could not check username: '+checkErr.message,'error'); }
+  if(existing && existing.length){ submit.disabled=false; return setMsg('That username is taken','error'); }
+  const { error } = await supabase.auth.signUp({ email, password, options:{ data:{ username }, emailRedirectTo:window.location.origin } });
+  submit.disabled=false;
+  if(error) return setMsg(error.message,'error');
+  setMsg('Account created! Check '+email+' to verify, then log in.','ok');
+  signupForm.reset();
+}
+async function handleLogin(e){
+  e.preventDefault();
+  const identifier=$('liId').value.trim(), password=$('liPassword').value;
+  if(!identifier||!password) return setMsg('Enter your login and password','error');
+  const submit=$('loginSubmit'); submit.disabled=true; setMsg('Logging in…');
+  try {
+    const resp = await fetch('/api/login',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ identifier, password }) });
+    const data = await resp.json();
+    if(!resp.ok){ submit.disabled=false; return setMsg(data.error||'Login failed','error'); }
+    const { error } = await supabase.auth.setSession({ access_token:data.access_token, refresh_token:data.refresh_token });
+    submit.disabled=false;
+    if(error) return setMsg(error.message,'error');
+    loginForm.reset(); closeModal();
+    await init();   // reload practice in place with the logged-in session
+  } catch(err){ submit.disabled=false; setMsg('Login failed — try again','error'); }
+}
+$('authClose').addEventListener('click', closeModal);
+authModal.addEventListener('click', e => { if(e.target===authModal) closeModal(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape' && !authModal.hidden) closeModal(); });
+authModal.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); (loginForm.hidden?signupForm:loginForm).requestSubmit(); } });
+signupForm.addEventListener('submit', handleSignup);
+loginForm.addEventListener('submit', handleLogin);
+$('gateLogin').onclick = () => openModal('login');
+
+/* ---------- state ---------- */
+let struggle = [], cur = null, curIdx = -1, landings = [], reps = 0, running = false, started = false, lastTime = 0, showKeys = true;
+const WINDOW = 5, GOAL_MIN = 0.5, GOAL_MAX = 5.0, GOAL_STEP = 0.25;
+let targetSec = 2.0;
+const held = new Map();
+const SECTIONS = ['pracGate','pracEmpty','pracIntro','pracDrill','pracDone'];
+function show(id){ SECTIONS.forEach(s => { const el=$(s); if(el) el.hidden = (s!==id); }); }
+function setStatus(on, t){ $('statusDot').classList.toggle('on', !!on); $('statusText').textContent = t; }
+
+init();
+async function init(){
+  const { data:{ session } } = await supabase.auth.getSession();
+  renderNav(session);
+  if(!session){ show('pracGate'); return; }
+
+  const { data, error } = await supabase.from('scores').select('splits');
+  if(error){ console.error(error); show('pracEmpty'); return; }
+
+  // aggregate every non-null landing per chord (all-time), same as the heatmap
+  const samples = {};
+  for(const r of (data||[])){
+    if(!r.splits) continue;
+    for(const k in r.splits){ const ms = r.splits[k]; if(ms==null) continue; (samples[k]||(samples[k]=[])).push(ms); }
+  }
+  const avgs = Object.entries(samples)
+    .filter(([k,a]) => a.length >= 3)                                   // need a little data to trust it
+    .map(([k,a]) => ({ avg: a.reduce((s,x)=>s+x,0)/a.length, chord: chordFromKey(k) }))
+    .filter(x => x.chord);
+  avgs.sort((a,b) => b.avg - a.avg);                                    // slowest first
+  const pick = avgs.slice(0, 3);
+  if(!pick.length){ show('pracEmpty'); return; }
+
+  struggle = pick.map(x => x.chord);
+  $('struggleRow').innerHTML = pick.map(x =>
+    `<div class="struggle-card">${keyboardSVG(x.chord)}<span class="nm">${x.chord.name}</span><span class="sp">${(x.avg/1000).toFixed(2)}s avg</span></div>`
+  ).join('');
+  show('pracIntro');
+  initMidi();
+}
+
+/* ---------- MIDI ---------- */
+async function initMidi(){
+  if(!navigator.requestMIDIAccess){ setStatus(false, "Web MIDI needs Chrome/Edge on desktop"); return; }
+  try {
+    const access = await navigator.requestMIDIAccess({sysex:false});
+    const pick = () => {
+      const ins = [...access.inputs.values()];
+      ins.forEach(i => i.onmidimessage = onMidi);
+      setStatus(ins.length > 0, ins.length ? (ins[0].name || "keyboard connected") : "no keyboard connected");
+    };
+    access.onstatechange = pick; pick();
+  } catch(e){ console.error('MIDI', e); setStatus(false, "MIDI unavailable — reload"); }
+}
+function onMidi(ev){
+  const [st,d1,d2] = ev.data, cmd = st & 0xF0;
+  if(cmd===0x90 && d2>0) held.set(d1,d2);
+  else if(cmd===0x80 || (cmd===0x90 && d2===0)) held.delete(d1);
+  if(running) checkMatch();
+}
+function checkMatch(){
+  const notes = [...held.keys()]; if(!notes.length || !cur) return;
+  const tgt = new Set(cur.pcs), h = new Set(notes.map(n => n%12));
+  if(h.size !== tgt.size) return;
+  for(const p of tgt) if(!h.has(p)) return;
+  if(cur.bass != null && (Math.min(...notes)%12) !== cur.bass) return;   // inversions need the right bass
+  advance();
+}
+
+/* ---------- drill: cycle the 3 chords randomly until the last-5 avg beats the target ---------- */
+function pickChord(){
+  let i;
+  if(struggle.length === 1) i = 0;
+  else { do { i = Math.floor(Math.random()*struggle.length); } while(i === curIdx); }   // no back-to-back repeats
+  curIdx = i; return struggle[i];
+}
+function startDrill(){
+  landings = []; reps = 0; running = true; started = false;
+  $('drillGoal').textContent = 'goal: last-5 avg under ' + fmtGoal(targetSec) + 's/chord';
+  $('pracKbd').style.display = showKeys ? '' : 'none';   // honor the key-hints toggle
+  cur = pickChord();
+  updateHud();
+  show('pracDrill');
+  showRep();
+}
+function showRep(){ $('pracChord').textContent = cur.name; if(showKeys) $('pracKbd').innerHTML = keyboardSVG(cur); }
+function advance(){
+  const now = performance.now();
+  if(!started){ started = true; lastTime = now; }          // first chord = go-signal, starts the clock
+  else { landings.push(now - lastTime); lastTime = now; reps++; }
+  updateHud();
+  if(landings.length >= WINDOW){                            // once we have a full window, check the target
+    const avg = landings.slice(-WINDOW).reduce((s,x)=>s+x,0)/WINDOW;
+    if(avg < targetSec*1000){ finish(avg); return; }
+  }
+  cur = pickChord();
+  showRep();
+}
+function updateHud(){
+  $('pracReps').textContent = reps;
+  $('pracAvg').textContent = landings.length >= WINDOW
+    ? (landings.slice(-WINDOW).reduce((s,x)=>s+x,0)/WINDOW/1000).toFixed(2)
+    : '—';
+}
+function finish(avg){
+  running = false;
+  $('pracTotal').innerHTML = (avg/1000).toFixed(2) + 's <span class="done-avg">/ch · cleared in ' + reps + ' reps</span>';
+  show('pracDone');
+}
+
+/* ---------- adjustable goal ---------- */
+const fmtGoal = v => { const s = v.toFixed(2); return s.endsWith('0') ? s.slice(0,-1) : s; };
+function renderGoal(){ $('goalVal').textContent = fmtGoal(targetSec); }
+function setGoal(delta){ targetSec = Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.round((targetSec+delta)/GOAL_STEP)*GOAL_STEP)); renderGoal(); }
+$('goalUp').onclick   = () => setGoal(GOAL_STEP);
+$('goalDown').onclick = () => setGoal(-GOAL_STEP);
+renderGoal();
+
+function renderKeysToggle(){ const b=$('keysToggle'); b.textContent = showKeys ? '🎹 key hints: on' : 'key hints: off'; b.classList.toggle('off', !showKeys); }
+$('keysToggle').onclick = () => { showKeys = !showKeys; renderKeysToggle(); };
+renderKeysToggle();
+
+$('drillStart').onclick   = startDrill;
+$('drillRestart').onclick = startDrill;
+$('drillAgain').onclick   = () => show('pracIntro');
+$('drillBack').onclick    = () => { running = false; show('pracIntro'); };
+document.addEventListener('keydown', e => {   // spacebar: start from the intro, "next" from the done screen
+  if(e.code !== 'Space' || !authModal.hidden) return;
+  if(!$('pracIntro').hidden){ e.preventDefault(); startDrill(); }
+  else if(!$('pracDone').hidden){ e.preventDefault(); show('pracIntro'); }
+});
+</script>
 </body>
 </html>

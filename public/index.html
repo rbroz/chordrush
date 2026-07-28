@@ -868,6 +868,7 @@ async function renderAuth(){
   } else {
     nav.innerHTML = `<button class="nav-btn" id="authBtn">log in</button>`;
     $('authBtn').onclick = () => openModal('login');
+    if(new URLSearchParams(location.search).has('login')) openModal('login');   // deep-link, e.g. from /practice
   }
 }
 
