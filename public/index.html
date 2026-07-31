@@ -107,6 +107,7 @@
         <button class="filter" data-inv="0">root</button>
         <button class="filter" data-inv="1">1st inv</button>
         <button class="filter" data-inv="2">2nd inv</button>
+        <button class="filter free" id="freeBtn">freestyle</button>
       </div>
     </div>
     <div class="err" id="errBox" style="display:none;"></div>
@@ -244,6 +245,7 @@ const CHORD_TYPES = {
 };
 const enabled = { major:true, minor:false };   // filter-bar pool (major/minor only)
 const enabledInv = { 0:true, 1:false, 2:false };   // default = root only → the classic leaderboard
+let freestyle = false;   // any-voicing mode: show chord names, accept any inversion (own board)
 
 // pitch class → note name, for slash-chord bass labels ("G/B")
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
@@ -283,6 +285,15 @@ function buildOrder(config){
     }
     return out;
   }
+  // Freestyle: every enabled type × every root, ANY voicing (no bass requirement) —
+  // one card per chord name, e.g. 12 majors.
+  if(freestyle){
+    const flist=[];
+    for(const type of enabledTypes())
+      for(const r of ROOTS)
+        flist.push(chordFor(r, type, 0, true));
+    return shuffled(flist);
+  }
   // Filter-bar test: the FULL cross-product — every enabled type × every root × every
   // selected voicing is its own chord. So majors × root+1st = 24, all three = 36.
   const invs = enabledInvs();
@@ -300,12 +311,14 @@ function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ cons
 // Any other voicing set gets its own board (e.g. "major|0,1,2").
 function modeKey(){
   const t = enabledTypes().join("+");
+  if(freestyle) return t + "|free";                   // any-voicing → its own board
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return t;        // root only → the classic board
   return t + "|" + invs.join(",");                    // any other voicing set → its own board
 }
 function modeLabel(){
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
+  if(freestyle) return types + " · any voicing";
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return types;
   return types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
@@ -315,9 +328,11 @@ const MAX_TOP=5;
 /* ---------- State ---------- */
 let midiAccess=null, currentInput=null;
 const heldNotes=new Map();
+const CHORD_WINDOW=80;                    // ms: the full chord must be struck within this window of the first note
+let graspTimer=null;                      // fires if the chord isn't completed in time → "not all at once"
 let order=[], idx=0, phase="idle";      // idle | ready | running | done
 let startTime=0, completions=[], rafId=null, runSplits={};   // runSplits: this run's per-chord landing times
-let attemptCounted=false, wrongEntries=0, erroredSet=new Set();   // accuracy: per-attempt latch, total wrong-chord entries, chords with >=1 miss
+let wrongEntries=0, erroredSet=new Set();   // accuracy: total mistakes, and which chord indices had >=1 miss
 const sessionRuns={};                   // modeKey -> last finished run this session (for restoring the view)
 let currentSession=null;                // set by renderAuth(); drives DB-vs-localStorage
 
@@ -373,11 +388,16 @@ function showErr(m){ errBox.textContent=m; errBox.style.display="block"; }
 
 function onMidi(ev){
   const [status,d1,d2]=ev.data, cmd=status&0xF0;
-  if(cmd===0x90&&d2>0){ heldNotes.set(d1,d2); if(soundOn) playNote(d1,d2); }
+  const isOn = cmd===0x90 && d2>0;
+  if(isOn){ heldNotes.set(d1,d2); if(soundOn) playNote(d1,d2); }
   else if(cmd===0x80||(cmd===0x90&&d2===0)){ heldNotes.delete(d1); stopNote(d1); }
   else return;
   renderHeld();
-  if(phase==="ready"||phase==="running") evaluate();
+  if(phase==="ready"||phase==="running"){
+    if(evaluate()) return;                 // struck the exact chord → advanced
+    if(heldNotes.size===0) disarmGrasp();  // hand clear → nothing pending
+    else if(isOn) armGrasp();              // a new strike that isn't the chord → judge it once input settles
+  }
 }
 function renderHeld(){
   const notes=[...heldNotes.keys()].sort((a,b)=>a-b);
@@ -475,25 +495,40 @@ function splitKey(chord, bassPc){
   if(inv < 0) inv = chord.inv || 0;                // fallback (shouldn't happen on a valid match)
   return PC_NAME[rootPc] + ' ' + chord.type + ' ' + INV_KEY[inv];
 }
-// Runs on every note change. An "entry" = a full-size chord attempt: the moment the
-// held hand reaches the target's note count. Match → advance (a right chord); a full
-// hand that's wrong (wrong notes, or right notes in the wrong voicing) → one wrong
-// entry. Accuracy = right chords / total entries, so extra wrong grabs keep hurting it.
+// Runs on every note change to detect completion. A full hand with exactly the target
+// pitch classes advances; the right notes in the WRONG voicing (wrong bass) is a mistake
+// with no stray note, so it's counted here. Stray wrong notes are counted in onMidi.
+// Returns true if the held notes are exactly the target chord (right notes + voicing),
+// advancing the run. Otherwise false — onMidi then judges the strike via armGrasp.
 function evaluate(){
   const notes=[...heldNotes.keys()];
+  if(!notes.length) return false;
   const chord=order[idx];
-  const tgtSize=chord.pcs.length;
-  if(notes.length < tgtSize){ attemptCounted=false; return; }   // still building — reset the per-attempt latch
   const held=new Set(notes.map(n=>n%12));
   const tgt=new Set(chord.pcs);
   let match = held.size===tgt.size;
   if(match) for(const p of tgt) if(!held.has(p)){ match=false; break; }
-  if(match && chord.bass!=null && (Math.min(...notes)%12)!==chord.bass) match=false;   // inversion drills need the right bass
-  if(match){ advance(); attemptCounted = heldNotes.size>0; return; }   // latch on so a held-over chord doesn't count against the next target
-  if(!attemptCounted){ attemptCounted=true; markWrong(); }             // one full wrong chord = one wrong entry
+  if(match && chord.bass!=null && (Math.min(...notes)%12)!==chord.bass) match=false;   // wrong voicing isn't a match
+  if(!match) return false;
+  disarmGrasp();
+  advance();
+  return true;
 }
-// Record one wrong-chord entry: bump the total + live tally, mark this chord, flash red.
-function markWrong(){
+// The chord must be struck all at once: the first note opens a short window; if the full
+// chord isn't down by the time it closes, you played it in pieces (a single note, a slow
+// build, a hesitation) — one miss. A clean block grab completes well inside it.
+function armGrasp(){
+  clearTimeout(graspTimer);
+  graspTimer = setTimeout(()=>{
+    graspTimer=null;
+    if(heldNotes.size>0) markMiss();
+  }, CHORD_WINDOW);
+}
+function disarmGrasp(){ clearTimeout(graspTimer); graspTimer=null; }
+// Record one mistake (a wrong note, a wrong voicing, or a not-all-at-once chord) — but
+// only once the clock is running, so pre-test warm-up doesn't count.
+function markMiss(){
+  if(phase!=="running") return;
   wrongEntries++; erroredSet.add(idx);
   if(hErr) hErr.textContent=wrongEntries;
   flashBad();
@@ -508,8 +543,17 @@ function toggleType(type){
 }
 function toggleInv(i){
   if(phase==="running") return;
+  if(freestyle){                                         // leaving freestyle → switch to just this inversion
+    freestyle=false; enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[i]=true;
+    reconfigure(); return;
+  }
   if(enabledInv[i] && enabledInvs().length===1) return;  // keep at least one inversion on
   enabledInv[i]=!enabledInv[i];
+  reconfigure();
+}
+function toggleFreestyle(){
+  if(phase==="running") return;
+  freestyle=!freestyle;                                  // off → falls back to the current inversion picks (always >=1)
   reconfigure();
 }
 // A filter changed: rebuild the not-yet-started run, or refresh the idle/done stage.
@@ -525,7 +569,8 @@ function reconfigure(){
 }
 async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
-  document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !!enabledInv[b.dataset.inv]));
+  document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
+  $("freeBtn").classList.toggle("active", freestyle);
   $("boardTitle").textContent = "Top 5 · " + modeLabel();
   await refreshBoard();
 }
@@ -556,7 +601,7 @@ function start(){
   cancelAnimationFrame(rafId);   // kill any timer still running (e.g. restart mid-run) so loops don't stack
   order=buildOrder();
   idx=0; completions=[]; startTime=0; runSplits={}; phase="ready";
-  erroredSet=new Set(); wrongEntries=0; attemptCounted=false; if(hErr) hErr.textContent="0";
+  erroredSet=new Set(); wrongEntries=0; disarmGrasp(); if(hErr) hErr.textContent="0";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
   filterbar.classList.remove("locked"); invbar.classList.remove("locked");   // stays changeable until the clock starts
   hud.style.display="none";                 // timer stays hidden until the clock actually starts
@@ -897,6 +942,7 @@ deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
+$("freeBtn").onclick=toggleFreestyle;
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);
