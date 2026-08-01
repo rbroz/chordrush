@@ -11,7 +11,20 @@
 
 <link rel="stylesheet" href="/style.css">
 <style>
-  .lb-wrap { max-width: 780px; margin: 4vh auto 0; }
+  .lb-wrap { max-width: 1120px; margin: 4vh auto 0; }
+  .lb-heading { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 28px; }
+  .lb-loading { text-align: center; color: var(--muted); padding: 40px 0; }
+  .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; }
+  .lb-card { border: 1px solid var(--line); border-radius: 12px; padding: 15px 16px 9px; }
+  .lb-card.empty { opacity: .5; }
+  .lb-card-title { font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .lb-row { display: flex; align-items: center; gap: 10px; padding: 6px 2px; font-size: 14px; border-top: 1px solid var(--line); }
+  .lb-row:first-of-type { border-top: 0; }
+  .lb-row .r { width: 16px; color: var(--muted); flex: none; }
+  .lb-row .w { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .lb-row .t { color: var(--text); font-variant-numeric: tabular-nums; flex: none; }
+  .lb-row.top1 .r, .lb-row.top1 .t { color: var(--accent); font-weight: 700; }
+  .lb-card-empty { font-size: 13px; color: var(--muted); padding: 6px 2px 10px; }
   .lb-filters { display: flex; justify-content: center; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
   .lb-title { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 16px; }
   table.lb { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -51,48 +64,8 @@
 
   <main class="main">
     <div class="lb-wrap">
-      <div class="lb-filters">
-        <div class="filter-group">
-          <span class="fg-label">triads</span>
-          <div class="filterbar" id="typebar">
-            <button class="filter active" data-type="major">majors</button>
-            <button class="filter" data-type="minor">minors</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <span class="fg-label">7ths</span>
-          <div class="filterbar" id="typebar7">
-            <button class="filter" data-type="maj7">maj7</button>
-            <button class="filter" data-type="min7">min7</button>
-            <button class="filter" data-type="dom7">dom7</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <span class="fg-label">voicing</span>
-          <div class="filterbar" id="invbar">
-            <button class="filter active" data-inv="0">root</button>
-            <button class="filter" data-inv="1">1st inv</button>
-            <button class="filter" data-inv="2">2nd inv</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="lb-title" id="lbTitle">majors · root</div>
-
-      <table class="lb">
-        <thead>
-          <tr>
-            <th class="l">#</th>
-            <th class="l">Player</th>
-            <th>Time</th>
-            <th>/chord</th>
-            <th>Accuracy</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody id="lbBody"></tbody>
-      </table>
-      <div class="lb-empty" id="lbEmpty" hidden>No times yet — be the first!</div>
+      <div class="lb-heading">every board · best time per player</div>
+      <div class="lb-grid" id="lbGrid"><div class="lb-loading">loading boards…</div></div>
     </div>
   </main>
 
@@ -103,83 +76,40 @@ const supabase = createClient(
   'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
 );
 const $ = id => document.getElementById(id);
-const ROOT_N = 12;
-const TYPE_LABEL = { major:'majors', minor:'minors', maj7:'maj7', min7:'min7', dom7:'dom7' };
-const INV_LABEL = ['root','1st inv','2nd inv'];
-
-let enabled = { major:true, minor:false, maj7:false, min7:false, dom7:false };   // order matches Time Trials' CHORD_TYPES so multi-type mode keys line up
-let enabledInv = { 0:true, 1:false, 2:false };
-let freestyle = false;
-
-const enabledTypes = () => Object.keys(enabled).filter(t => enabled[t]);
-const enabledInvs  = () => [0,1,2].filter(i => enabledInv[i]);
-
-// mode key must match Time Trials' modeKey() so the boards line up
-function modeKey(){
-  const t = enabledTypes().join('+');
-  if(freestyle) return t + '|free';
-  const invs = enabledInvs();
-  if(invs.length===1 && invs[0]===0) return t;
-  return t + '|' + invs.join(',');
-}
-function modeLabel(){
-  const types = enabledTypes().map(t => TYPE_LABEL[t]).join(' + ');
-  if(freestyle) return types + ' · any voicing';
-  const invs = enabledInvs();
-  if(invs.length===1 && invs[0]===0) return types + ' · root';
-  return types + ' · ' + invs.map(i => INV_LABEL[i]).join('/');
-}
-function countForMode(mode){
-  const [tp, ip] = mode.split('|');
-  const types = tp.split('+').length;
-  const invs = ip && ip !== 'free' ? ip.split(',').length : 1;
-  return types * ROOT_N * invs;
-}
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-async function load(){
-  const mode = modeKey();
-  $('lbTitle').textContent = modeLabel();
-  const { data, error } = await supabase.rpc('get_leaderboard', { p_mode: mode, p_limit: 20 });
-  if(error) console.error('leaderboard', error);
-  const rows = error ? [] : (data || []);
-  const body = $('lbBody'), empty = $('lbEmpty');
-  body.innerHTML = '';
-  if(!rows.length){ empty.hidden = false; return; }
-  empty.hidden = true;
-  const fallbackCc = countForMode(mode);
-  rows.forEach((r, i) => {
-    const cc = r.chord_count || fallbackCc;
-    const t = r.time_ms / 1000;
-    const per = (t / cc).toFixed(2);
-    const acc = r.errors == null ? '—' : Math.round(cc / (cc + r.errors) * 100) + '%';
-    let date = ''; try { date = new Date(r.played_at).toLocaleDateString(undefined, {month:'short', day:'numeric'}); } catch(e){}
-    const tr = document.createElement('tr');
-    if(i === 0) tr.className = 'top1';
-    tr.innerHTML = `<td class="l rank">${i+1}</td><td class="l who">${escapeHtml(r.username || 'player')}</td><td class="time">${t.toFixed(2)}s</td><td>${per}/ch</td><td>${acc}</td><td>${date}</td>`;
-    body.appendChild(tr);
-  });
+// label any Time Trials mode key (e.g. "major", "major|1", "major+minor|0,1,2")
+const TYPE_LABEL = { major:'majors', minor:'minors', maj7:'maj7', min7:'min7', dom7:'dom7' };
+const INV_LABEL = ['root','1st inv','2nd inv','3rd inv'];
+function labelForMode(m){
+  const [tp, ip] = m.split('|');
+  const types = tp.split('+').map(t => TYPE_LABEL[t] || t).join(' + ');
+  if(!ip)           return types + ' · root';
+  if(ip === 'free') return types + ' · any voicing';
+  return types + ' · ' + ip.split(',').map(i => INV_LABEL[+i] || i).join('/');
 }
 
-// ---------- filter bar ----------
-function refreshFilters(){
-  document.querySelectorAll('.filter[data-type]').forEach(b => b.classList.toggle('active', !!enabled[b.dataset.type]));
-  document.querySelectorAll('.filter[data-inv]').forEach(b => b.classList.toggle('active', !freestyle && !!enabledInv[b.dataset.inv]));
-  load();
+// one call returns every populated board's top 5; render a card per mode that has plays
+async function loadAll(){
+  const { data, error } = await supabase.rpc('get_all_boards', { p_limit: 5 });
+  const rows = error ? [] : (data || []);
+  const byMode = new Map();
+  for(const r of rows){
+    if(r.mode.endsWith('|free')) continue;                 // freestyle was removed from the UI
+    if(!byMode.has(r.mode)) byMode.set(r.mode, []);
+    byMode.get(r.mode).push(r);
+  }
+  if(!byMode.size){ $('lbGrid').innerHTML = '<div class="lb-loading">No times yet — be the first!</div>'; return; }
+  const modes = [...byMode.keys()].sort((a, b) => {         // busiest boards first, then fastest #1
+    const A = byMode.get(a), B = byMode.get(b);
+    return (B.length - A.length) || (A[0].time_ms - B[0].time_ms);
+  });
+  $('lbGrid').innerHTML = modes.map(m => {
+    const rs = byMode.get(m).sort((x, y) => x.rank - y.rank);
+    const body = rs.map(r => `<div class="lb-row${r.rank===1?' top1':''}"><span class="r">${r.rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${(r.time_ms/1000).toFixed(2)}s</span></div>`).join('');
+    return `<div class="lb-card"><div class="lb-card-title">${labelForMode(m)}</div>${body}</div>`;
+  }).join('');
 }
-document.querySelectorAll('.filter[data-type]').forEach(b => b.onclick = () => {
-  const t = b.dataset.type;
-  if(enabled[t] && enabledTypes().length === 1) return;   // keep at least one type on
-  enabled[t] = !enabled[t];
-  refreshFilters();
-});
-document.querySelectorAll('.filter[data-inv]').forEach(b => b.onclick = () => {
-  const i = +b.dataset.inv;
-  if(freestyle){ freestyle=false; enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[i]=true; refreshFilters(); return; }
-  if(enabledInv[i] && enabledInvs().length === 1) return;   // keep at least one inversion on
-  enabledInv[i] = !enabledInv[i];
-  refreshFilters();
-});
 
 // ---------- nav account ----------
 function renderNav(session){
@@ -202,7 +132,7 @@ function renderNav(session){
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
   renderNav(session);
-  load();
+  loadAll();
 })();
 </script>
 </body>
