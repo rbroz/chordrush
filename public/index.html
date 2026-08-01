@@ -124,7 +124,6 @@
           <button class="filter" data-inv="0">root</button>
           <button class="filter" data-inv="1">1st inv</button>
           <button class="filter" data-inv="2">2nd inv</button>
-          <button class="filter free" id="freeBtn">freestyle</button>
         </div>
       </div>
     </div>
@@ -574,7 +573,6 @@ function reconfigure(){
 async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
-  $("freeBtn").classList.toggle("active", freestyle);
   await refreshBoard();
 }
 // Reflect the selected filter in the stage: restore this mode's finished run if
@@ -940,7 +938,6 @@ deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
-$("freeBtn").onclick=toggleFreestyle;
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);

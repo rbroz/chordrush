@@ -73,7 +73,6 @@
             <button class="filter active" data-inv="0">root</button>
             <button class="filter" data-inv="1">1st inv</button>
             <button class="filter" data-inv="2">2nd inv</button>
-            <button class="filter free" id="freeBtn">freestyle</button>
           </div>
         </div>
       </div>
@@ -166,7 +165,6 @@ async function load(){
 function refreshFilters(){
   document.querySelectorAll('.filter[data-type]').forEach(b => b.classList.toggle('active', !!enabled[b.dataset.type]));
   document.querySelectorAll('.filter[data-inv]').forEach(b => b.classList.toggle('active', !freestyle && !!enabledInv[b.dataset.inv]));
-  $('freeBtn').classList.toggle('active', freestyle);
   load();
 }
 document.querySelectorAll('.filter[data-type]').forEach(b => b.onclick = () => {
@@ -182,7 +180,6 @@ document.querySelectorAll('.filter[data-inv]').forEach(b => b.onclick = () => {
   enabledInv[i] = !enabledInv[i];
   refreshFilters();
 });
-$('freeBtn').onclick = () => { freestyle = !freestyle; refreshFilters(); };
 
 // ---------- nav account ----------
 function renderNav(session){
