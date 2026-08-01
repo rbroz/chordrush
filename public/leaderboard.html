@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Leaderboard — ChordRush</title>
+<meta name="description" content="The fastest chord players on ChordRush.">
+<link rel="canonical" href="https://chordrush.app/leaderboard">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+<link rel="stylesheet" href="/style.css">
+<style>
+  .lb-wrap { max-width: 780px; margin: 4vh auto 0; }
+  .lb-filters { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
+  .lb-title { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 16px; }
+  table.lb { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.lb th { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; text-align: right; padding: 0 10px 12px; white-space: nowrap; }
+  table.lb th.l, table.lb td.l { text-align: left; }
+  table.lb td { padding: 12px 10px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); white-space: nowrap; }
+  table.lb td.who { color: var(--text); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  table.lb td.rank { color: var(--muted); width: 32px; }
+  table.lb td.time { color: var(--text); font-weight: 600; }
+  table.lb tr.top1 td.rank, table.lb tr.top1 td.time { color: var(--accent); }
+  .lb-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0; }
+</style>
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <nav class="mode-nav">
+      <a class="mode-tab" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
+        <span>Time Trials</span>
+      </a>
+      <a class="mode-tab" href="/practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
+        <span>Practice</span>
+      </a>
+      <a class="mode-tab active" href="/leaderboard" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
+      </a>
+    </nav>
+    <div class="nav-account" id="navAccount"></div>
+  </header>
+
+  <main class="main">
+    <div class="lb-wrap">
+      <div class="lb-filters">
+        <div class="filterbar" id="typebar">
+          <button class="filter active" data-type="major">majors</button>
+          <button class="filter" data-type="minor">minors</button>
+        </div>
+        <div class="filterbar" id="invbar">
+          <button class="filter active" data-inv="0">root</button>
+          <button class="filter" data-inv="1">1st inv</button>
+          <button class="filter" data-inv="2">2nd inv</button>
+          <button class="filter free" id="freeBtn">freestyle</button>
+        </div>
+      </div>
+
+      <div class="lb-title" id="lbTitle">majors · root</div>
+
+      <table class="lb">
+        <thead>
+          <tr>
+            <th class="l">#</th>
+            <th class="l">Player</th>
+            <th>Time</th>
+            <th>/chord</th>
+            <th>Accuracy</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="lbBody"></tbody>
+      </table>
+      <div class="lb-empty" id="lbEmpty" hidden>No times yet — be the first!</div>
+    </div>
+  </main>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+const ROOT_N = 12;
+const TYPE_LABEL = { major:'majors', minor:'minors' };
+const INV_LABEL = ['root','1st inv','2nd inv'];
+
+let enabled = { major:true, minor:false };
+let enabledInv = { 0:true, 1:false, 2:false };
+let freestyle = false;
+
+const enabledTypes = () => Object.keys(enabled).filter(t => enabled[t]);
+const enabledInvs  = () => [0,1,2].filter(i => enabledInv[i]);
+
+// mode key must match Time Trials' modeKey() so the boards line up
+function modeKey(){
+  const t = enabledTypes().join('+');
+  if(freestyle) return t + '|free';
+  const invs = enabledInvs();
+  if(invs.length===1 && invs[0]===0) return t;
+  return t + '|' + invs.join(',');
+}
+function modeLabel(){
+  const types = enabledTypes().map(t => TYPE_LABEL[t]).join(' + ');
+  if(freestyle) return types + ' · any voicing';
+  const invs = enabledInvs();
+  if(invs.length===1 && invs[0]===0) return types + ' · root';
+  return types + ' · ' + invs.map(i => INV_LABEL[i]).join('/');
+}
+function countForMode(mode){
+  const [tp, ip] = mode.split('|');
+  const types = tp.split('+').length;
+  const invs = ip && ip !== 'free' ? ip.split(',').length : 1;
+  return types * ROOT_N * invs;
+}
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function load(){
+  const mode = modeKey();
+  $('lbTitle').textContent = modeLabel();
+  const { data, error } = await supabase.rpc('get_leaderboard', { p_mode: mode, p_limit: 20 });
+  if(error) console.error('leaderboard', error);
+  const rows = error ? [] : (data || []);
+  const body = $('lbBody'), empty = $('lbEmpty');
+  body.innerHTML = '';
+  if(!rows.length){ empty.hidden = false; return; }
+  empty.hidden = true;
+  const fallbackCc = countForMode(mode);
+  rows.forEach((r, i) => {
+    const cc = r.chord_count || fallbackCc;
+    const t = r.time_ms / 1000;
+    const per = (t / cc).toFixed(2);
+    const acc = r.errors == null ? '—' : Math.round(cc / (cc + r.errors) * 100) + '%';
+    let date = ''; try { date = new Date(r.played_at).toLocaleDateString(undefined, {month:'short', day:'numeric'}); } catch(e){}
+    const tr = document.createElement('tr');
+    if(i === 0) tr.className = 'top1';
+    tr.innerHTML = `<td class="l rank">${i+1}</td><td class="l who">${escapeHtml(r.username || 'player')}</td><td class="time">${t.toFixed(2)}s</td><td>${per}/ch</td><td>${acc}</td><td>${date}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+// ---------- filter bar ----------
+function refreshFilters(){
+  document.querySelectorAll('.filter[data-type]').forEach(b => b.classList.toggle('active', !!enabled[b.dataset.type]));
+  document.querySelectorAll('.filter[data-inv]').forEach(b => b.classList.toggle('active', !freestyle && !!enabledInv[b.dataset.inv]));
+  $('freeBtn').classList.toggle('active', freestyle);
+  load();
+}
+document.querySelectorAll('.filter[data-type]').forEach(b => b.onclick = () => {
+  const t = b.dataset.type;
+  if(enabled[t] && enabledTypes().length === 1) return;   // keep at least one type on
+  enabled[t] = !enabled[t];
+  refreshFilters();
+});
+document.querySelectorAll('.filter[data-inv]').forEach(b => b.onclick = () => {
+  const i = +b.dataset.inv;
+  if(freestyle){ freestyle=false; enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[i]=true; refreshFilters(); return; }
+  if(enabledInv[i] && enabledInvs().length === 1) return;   // keep at least one inversion on
+  enabledInv[i] = !enabledInv[i];
+  refreshFilters();
+});
+$('freeBtn').onclick = () => { freestyle = !freestyle; refreshFilters(); };
+
+// ---------- nav account ----------
+function renderNav(session){
+  const nav = $('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+  } else {
+    nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
+  }
+}
+
+(async () => {
+  const { data:{ session } } = await supabase.auth.getSession();
+  renderNav(session);
+  load();
+})();
+</script>
+</body>
+</html>

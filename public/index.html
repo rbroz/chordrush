@@ -87,6 +87,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
         <span>Practice</span>
       </a>
+      <a class="mode-tab" href="/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
+      </a>
     </nav>
     <div class="nav-account" id="navAccount"></div>
   </header>
@@ -113,17 +117,15 @@
     <div class="err" id="errBox" style="display:none;"></div>
 
     <div class="play-grid">
-
-      <div class="panel panel-left">
-        <div class="chord-hint" id="chordHint" style="display:none;"></div>
-      </div>
-
       <div class="panel panel-center">
         <div class="stage" id="stage">
           <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
 
           <div id="playWrap" style="display:none;">
-            <div class="chord-name" id="chordName">—</div>
+            <div class="chord-row">
+              <div class="chord-name" id="chordName">—</div>
+              <div class="chord-hint" id="chordHint" style="display:none;"></div>
+            </div>
             <div class="prompt-label" id="promptLabel">play</div>
             <div class="held" id="heldLine"></div>
           </div>
@@ -145,21 +147,8 @@
           <span class="item"><i>best</i> <b id="hBest">—</b></span>
         </div>
       </div>
-
-      <div class="panel panel-right">
-        <div class="board" id="boardPanel">
-          <div class="board-title" id="boardTitle">Top 5</div>
-          <ol class="board-list" id="boardList"></ol>
-          <div class="board-empty" id="boardEmpty">no times yet</div>
-        </div>
-      </div>
-
     </div>
   </main>
-
-  <footer class="site-footer">
-    <p>ChordRush is a free tool for practicing piano chords on a MIDI keyboard. Drill your major and minor chords and their inversions against the clock, track your best times, and see which chords are slowing you down — no signup, just plug in a MIDI keyboard in Chrome or Edge and play.</p>
-  </footer>
 
   <div class="modal-overlay" id="unsupportedModal" hidden>
     <div class="modal">
@@ -571,7 +560,6 @@ async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   $("freeBtn").classList.toggle("active", freestyle);
-  $("boardTitle").textContent = "Top 5 · " + modeLabel();
   await refreshBoard();
 }
 // Reflect the selected filter in the stage: restore this mode's finished run if
@@ -702,11 +690,11 @@ async function finish(){
 
   // save the run (DB if logged in, else localStorage), then read back the fresh top 5
   await addScore(modeKey(), timeMs, order.length, playedAt, runSplits, wrongEntries);
-  const top = await getTop(modeKey());
+  const top = await getLeaderboard(modeKey());
   const rank = top.findIndex(e => e.t.toFixed(2) === total.toFixed(2));
 
-  if(rank===0)      $("pbWrap").innerHTML='<div class="pb-badge">★ new best time</div>';
-  else if(rank>0)   $("pbWrap").innerHTML=`<div class="pb-badge">new top 5 — #${rank+1}</div>`;
+  if(rank===0)      $("pbWrap").innerHTML='<div class="pb-badge">★ #1 — top of the board</div>';
+  else if(rank>0)   $("pbWrap").innerHTML=`<div class="pb-badge">on the board — #${rank+1}</div>`;
   else              $("pbWrap").innerHTML='';   // no callout for a non-top-5 time
 
   renderSplits();
@@ -746,6 +734,14 @@ async function getTop(mode){
   }
   return localTop(mode);
 }
+// Public leaderboard for a mode: best time per user, top 5, with usernames. Readable by
+// everyone (incl. logged-out) via the get_leaderboard RPC (exposes only these fields).
+async function getLeaderboard(mode){
+  const { data, error } = await supabase.rpc('get_leaderboard', { p_mode: mode });
+  if(error){ console.error('getLeaderboard', error); return []; }
+  return data.map(r => ({ name:r.username, t:r.time_ms/1000, c:r.chord_count, er:r.errors, d:r.played_at }));
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 async function addScore(mode, timeMs, chordCount, playedAt, splits, errors){
   if(currentSession){
     // played_at is the run's unique key; on conflict the DB ignores the dup
@@ -820,26 +816,13 @@ async function migrateLocalToAccount(){
 
 /* ---------- Board rendering ---------- */
 async function refreshBest(){
-  const t = await getTop(modeKey());
+  const t = await getLeaderboard(modeKey());
   hBest.textContent = t.length ? t[0].t.toFixed(2)+'s' : '—';
 }
+// The full board now lives on /leaderboard; here we only refresh the HUD "best" target.
 async function refreshBoard(justSetRank, prefetched){
-  const t = prefetched || await getTop(modeKey());
+  const t = prefetched || await getLeaderboard(modeKey());
   hBest.textContent = t.length ? t[0].t.toFixed(2)+'s' : '—';
-  const list=$("boardList"), empty=$("boardEmpty");
-  list.innerHTML="";
-  if(!t.length){ empty.style.display="block"; return; }
-  empty.style.display="none";
-  t.forEach((e,i)=>{
-    const li=document.createElement("li");
-    li.className=(i===0?"top1 ":"")+(i===justSetRank?"justset":"");
-    let date="";
-    try { date=new Date(e.d).toLocaleDateString(undefined,{month:"short",day:"numeric"}); } catch(err){}
-    const cc = e.c || countForMode(modeKey());
-    const acc = e.er==null ? '' : `<span class="bacc">${Math.round(cc/(cc+e.er)*100)}%</span>`;
-    li.innerHTML=`<span class="rank">${i+1}</span><span class="time">${e.t.toFixed(2)}s</span><span class="avg">${(e.t/cc).toFixed(2)}/ch</span>${acc}<span class="date">${date}</span>`;
-    list.appendChild(li);
-  });
 }
 
 /* ---------- Auth: modal + signup + login + nav state ---------- */
