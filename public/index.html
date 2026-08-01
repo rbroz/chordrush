@@ -103,15 +103,29 @@
         <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
         <button id="soundBtn" type="button"></button>
       </div>
-      <div class="filterbar" id="filterbar">
-        <button class="filter" data-type="major">majors</button>
-        <button class="filter" data-type="minor">minors</button>
+      <div class="filter-group">
+        <span class="fg-label">triads</span>
+        <div class="filterbar" id="filterbar">
+          <button class="filter" data-type="major">majors</button>
+          <button class="filter" data-type="minor">minors</button>
+        </div>
       </div>
-      <div class="filterbar" id="invbar">
-        <button class="filter" data-inv="0">root</button>
-        <button class="filter" data-inv="1">1st inv</button>
-        <button class="filter" data-inv="2">2nd inv</button>
-        <button class="filter free" id="freeBtn">freestyle</button>
+      <div class="filter-group">
+        <span class="fg-label">7ths</span>
+        <div class="filterbar" id="filterbar7">
+          <button class="filter" data-type="maj7">maj7</button>
+          <button class="filter" data-type="min7">min7</button>
+          <button class="filter" data-type="dom7">dom7</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="fg-label">voicing</span>
+        <div class="filterbar" id="invbar">
+          <button class="filter" data-inv="0">root</button>
+          <button class="filter" data-inv="1">1st inv</button>
+          <button class="filter" data-inv="2">2nd inv</button>
+          <button class="filter free" id="freeBtn">freestyle</button>
+        </div>
       </div>
     </div>
     <div class="err" id="errBox" style="display:none;"></div>
@@ -332,6 +346,7 @@ const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$
 const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest"), hErr=$("hErr");
 const filterbar=$("filterbar"), invbar=$("invbar");
+const lockFilters = on => document.querySelectorAll('.filterbars .filterbar').forEach(b => b.classList.toggle('locked', on));
 const modal=$("authModal"), msg=$("authMsg"), loginForm=$("loginForm"), signupForm=$("signupForm");
 const setMsg=(t,kind='')=>{ msg.textContent=t; msg.className='modal-msg'+(kind?' '+kind:''); };
 
@@ -591,7 +606,7 @@ function start(){
   idx=0; completions=[]; startTime=0; runSplits={}; phase="ready";
   erroredSet=new Set(); wrongEntries=0; disarmGrasp(); if(hErr) hErr.textContent="0";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
-  filterbar.classList.remove("locked"); invbar.classList.remove("locked");   // stays changeable until the clock starts
+  lockFilters(false);   // stays changeable until the clock starts
   hud.style.display="none";                 // timer stays hidden until the clock actually starts
   hTime.textContent="0.00"; hTime.classList.add("dim");
   hProg.textContent="1 / "+order.length;
@@ -652,7 +667,7 @@ function advance(){
   if(phase==="ready"){                 // first chord = the go-signal
     runSplits[splitKey(order[0], Math.min(...heldNotes.keys())%12)] = null;   // start chord — no landing time
     startTime=now; completions=[now]; phase="running";
-    filterbar.classList.add("locked"); invbar.classList.add("locked");  // lock the pool now that the clock is running
+    lockFilters(true);  // lock the pool now that the clock is running
     hud.style.display="flex";           // reveal the timer now that the clock is running
     syncStartBtn();                     // reveal the restart button now that the trial has started
     hTime.classList.remove("dim");
@@ -679,7 +694,7 @@ async function finish(){
   clearHint();
   phase="done";
   syncStartBtn();
-  filterbar.classList.remove("locked"); invbar.classList.remove("locked");
+  lockFilters(false);
   const total=(completions[completions.length-1]-startTime)/1000;
   const timeMs=Math.round(total*1000);
   const playedAt=new Date().toISOString();   // unique per run → dedup key + accurate date

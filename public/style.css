@@ -49,14 +49,16 @@ body {
 .filterbar { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line);
              border-radius:12px; padding:5px; }
 .filterbar.locked { opacity:.4; pointer-events:none; }
-.filterbars { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:7vh; }
+.filterbars { display:flex; gap:14px; justify-content:center; align-items:flex-end; flex-wrap:wrap; margin-top:7vh; }
+.filter-group { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.fg-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
 .dash-section .filterbars { margin:0 auto 20px; }
 .dash-section .filterbars .filterbar { margin:0; }
 .filter { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent; border:0;
           border-radius:8px; padding:7px 16px; cursor:pointer; transition:color .12s, background .12s, box-shadow .12s; }
 .filter:hover { color:var(--text); }
 .filter.active { color:var(--accent); background:var(--bg); box-shadow:0 1px 2px rgba(0,0,0,.05); }
-.filter.free { margin-left:8px; border-left:1px solid var(--line); padding-left:12px; }
+.filter.free, .filter.sep { margin-left:8px; border-left:1px solid var(--line); padding-left:12px; }
 
 .stage { margin-top:4vh; min-height:200px; width:100%;
          display:flex; flex-direction:column; justify-content:center; align-items:center; border-radius:16px; }

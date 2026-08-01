@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="/style.css">
 <style>
   .lb-wrap { max-width: 780px; margin: 4vh auto 0; }
-  .lb-filters { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
+  .lb-filters { display: flex; justify-content: center; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
   .lb-title { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 16px; }
   table.lb { width: 100%; border-collapse: collapse; font-size: 15px; }
   table.lb th { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; text-align: right; padding: 0 10px 12px; white-space: nowrap; }
@@ -52,15 +52,29 @@
   <main class="main">
     <div class="lb-wrap">
       <div class="lb-filters">
-        <div class="filterbar" id="typebar">
-          <button class="filter active" data-type="major">majors</button>
-          <button class="filter" data-type="minor">minors</button>
+        <div class="filter-group">
+          <span class="fg-label">triads</span>
+          <div class="filterbar" id="typebar">
+            <button class="filter active" data-type="major">majors</button>
+            <button class="filter" data-type="minor">minors</button>
+          </div>
         </div>
-        <div class="filterbar" id="invbar">
-          <button class="filter active" data-inv="0">root</button>
-          <button class="filter" data-inv="1">1st inv</button>
-          <button class="filter" data-inv="2">2nd inv</button>
-          <button class="filter free" id="freeBtn">freestyle</button>
+        <div class="filter-group">
+          <span class="fg-label">7ths</span>
+          <div class="filterbar" id="typebar7">
+            <button class="filter" data-type="maj7">maj7</button>
+            <button class="filter" data-type="min7">min7</button>
+            <button class="filter" data-type="dom7">dom7</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="fg-label">voicing</span>
+          <div class="filterbar" id="invbar">
+            <button class="filter active" data-inv="0">root</button>
+            <button class="filter" data-inv="1">1st inv</button>
+            <button class="filter" data-inv="2">2nd inv</button>
+            <button class="filter free" id="freeBtn">freestyle</button>
+          </div>
         </div>
       </div>
 
@@ -91,10 +105,10 @@ const supabase = createClient(
 );
 const $ = id => document.getElementById(id);
 const ROOT_N = 12;
-const TYPE_LABEL = { major:'majors', minor:'minors' };
+const TYPE_LABEL = { major:'majors', minor:'minors', maj7:'maj7', min7:'min7', dom7:'dom7' };
 const INV_LABEL = ['root','1st inv','2nd inv'];
 
-let enabled = { major:true, minor:false };
+let enabled = { major:true, minor:false, maj7:false, min7:false, dom7:false };   // order matches Time Trials' CHORD_TYPES so multi-type mode keys line up
 let enabledInv = { 0:true, 1:false, 2:false };
 let freestyle = false;
 
