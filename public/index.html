@@ -624,7 +624,7 @@ function start(){
   showChord();
   syncStartBtn();
 }
-function showChord(){ chordName.textContent=order[idx].name; renderHint(order[idx]); }
+function showChord(){ const c=order[idx]; chordName.innerHTML = c.name + (c.inv ? '<span class="inv-tag">'+INV_LABEL[c.inv]+'</span>' : ''); renderHint(c); }
 
 // The keyboard is always shown for the current chord (renderHint); clearHint hides it,
 // e.g. on the finished screen where there's no current chord.
