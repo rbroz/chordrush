@@ -127,6 +127,7 @@
         </div>
       </div>
     </div>
+    <div class="test-summary" id="testSummary"></div>
     <div class="err" id="errBox" style="display:none;"></div>
 
     <div class="play-grid">
@@ -570,9 +571,18 @@ function reconfigure(){
     showStage();
   }
 }
+// Leaderboard-style summary of the selected test, shown under the filter bar.
+function updateTestSummary(){
+  const el=$('testSummary'); if(!el) return;
+  const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(' + ');
+  const invs = enabledInvs();
+  const voicing = (invs.length===1 && invs[0]===0) ? 'root' : invs.map(i=>INV_LABEL[i]).join('/');
+  el.textContent = types + ' · ' + voicing + ' · ' + countForMode(modeKey()) + ' chords';
+}
 async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
+  updateTestSummary();
   await refreshBoard();
 }
 // Reflect the selected filter in the stage: restore this mode's finished run if
@@ -610,6 +620,7 @@ function start(){
   hProg.textContent="1 / "+order.length;
   refreshBest();
   promptLabel.textContent="play to start";
+  updateTestSummary();
   showChord();
   syncStartBtn();
 }
