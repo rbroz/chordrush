@@ -23,6 +23,8 @@
   .struggle-card { display: flex; flex-direction: column; align-items: center; gap: 9px; }
   .struggle-card .nm { font-family: var(--mono); font-weight: 600; font-size: 16px; color: var(--text); }
   .struggle-card .sp { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .struggle-card .ivl { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); }
+  .inv-tag { display: block; font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: .04em; margin-top: 8px; }
   .prac-drill { margin-top: 6vh; display: flex; flex-direction: column; align-items: center; gap: 18px; }
   #pracKbd { min-height: 96px; }
   .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); }
@@ -410,7 +412,7 @@ function startLesson(keys){
   $('struggleRow').innerHTML = keys.map(k=>{
     const c = chordFromKey(k); if(!c) return '';
     const s = pickAvg[k] ? `<span class="sp">${(pickAvg[k].ms/1000).toFixed(2)}s avg</span>` : '';
-    return `<div class="struggle-card">${keyboardSVG(c)}<span class="nm">${c.name}</span>${s}</div>`;
+    return `<div class="struggle-card">${keyboardSVG(c)}<span class="nm">${c.name}</span>${c.inv?`<span class="ivl">${INV_KEY[c.inv]} inv</span>`:''}${s}</div>`;
   }).join('');
   $('pickModal').hidden = true;
   show('pracIntro');
@@ -467,7 +469,7 @@ function startDrill(){
   show('pracDrill');
   showRep();
 }
-function showRep(){ $('pracChord').textContent = cur.name; if(showKeys) $('pracKbd').innerHTML = keyboardSVG(cur); }
+function showRep(){ $('pracChord').innerHTML = cur.name + (cur.inv ? '<span class="inv-tag">'+INV_KEY[cur.inv]+' inv</span>' : ''); if(showKeys) $('pracKbd').innerHTML = keyboardSVG(cur); }
 function advance(){
   const now = performance.now();
   if(!started){ started = true; lastTime = now; }          // first chord = go-signal, starts the clock
