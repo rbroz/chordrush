@@ -149,7 +149,7 @@
       <div id="pickHeatmap" class="pick-heatmap"></div>
       <div class="pick-foot">
         <span id="pickCount" class="pick-count">0 selected</span>
-        <button class="start-btn" id="pickStart">Drill these →</button>
+        <button class="start-btn" id="pickStart">enter →</button>
       </div>
     </div>
   </div>
@@ -512,7 +512,8 @@ $('drillAgain').onclick   = () => show('pracIntro');
 $('drillBack').onclick    = () => { running = false; show('pracIntro'); };
 document.addEventListener('keydown', e => {   // spacebar: start from the intro, "next" from the done screen
   if(e.code !== 'Space' || !authModal.hidden) return;
-  if(!$('pracIntro').hidden){ e.preventDefault(); startDrill(); }
+  if(!$('pickModal').hidden){ e.preventDefault(); $('pickStart').click(); }   // picker open → "Drill these"
+  else if(!$('pracIntro').hidden){ e.preventDefault(); startDrill(); }
   else if(!$('pracDone').hidden){ e.preventDefault(); show('pracIntro'); }
 });
 </script>
