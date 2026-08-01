@@ -339,7 +339,9 @@ async function init(){
   if(!Object.keys(pickAvg).length){ show('pracEmpty'); return; }
 
   renderPicker();
-  openPicker();
+  const saved = loadLesson();
+  if(saved){ applyPicked(saved); startLesson(saved); }   // already picked today → skip the popup
+  else { openPicker(); }                                  // first Practice visit today → pick
   initMidi();
 }
 
@@ -392,10 +394,19 @@ function updatePickCount(){
   $('pickStart').disabled = picked.size===0;
 }
 function openPicker(){ $('pickModal').hidden = false; }
-$('pickStart').onclick = ()=>{
-  const keys=[...picked];
+
+// today's lesson persists for the local calendar day, so the popup only shows once/day
+function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+function loadLesson(){ try{ const l=JSON.parse(localStorage.getItem('chordrush:practiceLesson')); return (l && l.date===todayKey() && Array.isArray(l.keys) && l.keys.length) ? l.keys : null; }catch(e){ return null; } }
+function saveLesson(keys){ try{ localStorage.setItem('chordrush:practiceLesson', JSON.stringify({ date: todayKey(), keys })); }catch(e){} }
+function applyPicked(keys){
+  picked = new Set(keys);
+  $('pickHeatmap').querySelectorAll('td.has').forEach(td => td.classList.toggle('sel', picked.has(td.dataset.key)));
+  updatePickCount();
+}
+function startLesson(keys){
   struggle = keys.map(chordFromKey).filter(Boolean);
-  if(!struggle.length) return;
+  if(!struggle.length){ openPicker(); return; }   // stored keys went bad → fall back to the picker
   $('struggleRow').innerHTML = keys.map(k=>{
     const c = chordFromKey(k); if(!c) return '';
     const s = pickAvg[k] ? `<span class="sp">${(pickAvg[k].ms/1000).toFixed(2)}s avg</span>` : '';
@@ -403,6 +414,12 @@ $('pickStart').onclick = ()=>{
   }).join('');
   $('pickModal').hidden = true;
   show('pracIntro');
+}
+$('pickStart').onclick = ()=>{
+  const keys=[...picked];
+  if(!keys.length) return;
+  saveLesson(keys);       // remember today's pick so we don't re-prompt
+  startLesson(keys);
 };
 $('changeChords').onclick = openPicker;
 
