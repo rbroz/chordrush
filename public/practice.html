@@ -341,9 +341,9 @@ async function init(){
     if(!r.splits) continue;
     for(const k in r.splits){ const ms = r.splits[k]; if(ms==null) continue; (samples[k]||(samples[k]=[])).push(ms); }
   }
-  // per-chord all-time avg (need a little data to trust it)
+  // per-chord all-time avg — any chord with data (matches the dashboard heatmap)
   pickAvg = {};
-  for(const k in samples){ const a=samples[k]; if(a.length < 3) continue; pickAvg[k] = { ms: a.reduce((s,x)=>s+x,0)/a.length, n: a.length }; }
+  for(const k in samples){ const a=samples[k]; pickAvg[k] = { ms: a.reduce((s,x)=>s+x,0)/a.length, n: a.length }; }
   if(!Object.keys(pickAvg).length){ show('pracEmpty'); return; }
 
   renderPicker();
