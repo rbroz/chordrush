@@ -66,6 +66,18 @@
   .us-video { display: block; width: 100%; border-radius: 12px; margin: 0 0 12px; pointer-events: none; }
   .us-cap { color: #888; font-size: 14px; line-height: 1.5; margin: 0; text-align: center; }
   .done-avg { font-size: 0.4em; font-weight: 600; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
+  .done-tabs { display: flex; justify-content: center; gap: 26px; margin: 28px 0 16px; }
+  .done-tab { background: none; border: none; font-family: var(--mono); font-size: 13px; color: var(--muted); cursor: pointer; padding: 6px 2px; border-bottom: 2px solid transparent; letter-spacing: .02em; }
+  .done-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .done-tab:hover { color: var(--text); }
+  .done-panel[hidden] { display: none; }
+  /* compact the done screen so results + chart fit without scrolling */
+  #stage { margin-top: 1.5vh; }
+  #doneWrap .prompt-label { margin-top: 10px; }
+  #doneWrap .done-total { font-size: clamp(44px, 7vw, 66px); }
+  #doneWrap .done-tabs { margin: 26px 0 12px; }
+  #doneWrap .pr-banner { margin: 24px 0 8px; min-height: 0; }
+  #doneWrap .done-panel { max-width: 540px; margin-left: auto; margin-right: auto; }
   .site-footer { max-width: 620px; margin: 80px auto 40px; padding: 0 20px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
   .chord-hint { margin-top: 16px; display: flex; justify-content: center; animation: hintFade .35s ease; }
   .hint-kbd { max-width: 100%; height: auto; }
@@ -156,7 +168,18 @@
             <div class="prompt-label">finished</div>
             <div class="done-total" id="doneTotal">—</div>
             <div id="pbWrap"></div>
-            <div class="splits" id="splits"></div>
+            <div class="pr-banner" id="trendPr"></div>
+            <div class="done-tabs">
+              <button type="button" class="done-tab active" data-tab="trend">progress</button>
+              <button type="button" class="done-tab" data-tab="splits">chord splits</button>
+            </div>
+            <div class="done-panel" data-panel="trend">
+              <div id="trendChart"></div>
+              <div class="chart-empty" id="trendEmpty" style="display:none;"></div>
+            </div>
+            <div class="done-panel" data-panel="splits" hidden>
+              <div class="splits" id="splits"></div>
+            </div>
           </div>
         </div>
 
@@ -335,6 +358,7 @@ function modeLabel(){
   return types + " · " + invs.map(i=>INV_LABEL[i]).join("/");
 }
 const MAX_TOP=5;
+const LOCAL_MAX=1000;   // cap on stored guest run-history per mode (safety; a guest won't realistically hit it)
 
 /* ---------- State ---------- */
 let midiAccess=null, currentInput=null;
@@ -355,6 +379,12 @@ const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLab
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest"), hErr=$("hErr");
 const filterbar=$("filterbar"), invbar=$("invbar");
 const lockFilters = on => document.querySelectorAll('.filterbars .filterbar').forEach(b => b.classList.toggle('locked', on));
+// done-screen tabs (progress chart / chord splits) — delegated so it survives the session-restore innerHTML swap
+doneWrap.addEventListener('click', e => {
+  const b = e.target.closest('.done-tab'); if(!b) return;
+  doneWrap.querySelectorAll('.done-tab').forEach(t => t.classList.toggle('active', t===b));
+  doneWrap.querySelectorAll('.done-panel').forEach(p => { p.hidden = p.dataset.panel !== b.dataset.tab; });
+});
 const modal=$("authModal"), msg=$("authMsg"), loginForm=$("loginForm"), signupForm=$("signupForm");
 const setMsg=(t,kind='')=>{ msg.textContent=t; msg.className='modal-msg'+(kind?' '+kind:''); };
 
@@ -601,9 +631,10 @@ function showStage(){
   if(snap){
     idleMsg.style.display="none"; playWrap.style.display="none";
     doneWrap.innerHTML=snap.doneHTML; doneWrap.style.display="block";
-    hud.style.display="flex"; hTime.classList.remove("dim");
+    hud.style.display="none"; hTime.classList.remove("dim");   // done screen: HUD hidden (redundant with results up top)
     hTime.textContent=snap.timeText; hProg.textContent=snap.progText;
     phase="done";
+    renderTrend(modeKey());   // restored HTML has a stale chart with dead listeners → re-render fresh
   } else {
     start();     // no finished run for this mode → fresh "ready" state (chord + keys shown, clock idle)
   }
@@ -717,6 +748,7 @@ async function finish(){
   const playedAt=new Date().toISOString();   // unique per run → dedup key + accurate date
   hTime.textContent=total.toFixed(2);
   playWrap.style.display="none"; doneWrap.style.display="block";
+  hud.style.display="none";   // results are shown up top now — the live HUD is redundant on the done screen
   const acc=Math.round(order.length/(order.length+wrongEntries)*100);
   $("doneTotal").innerHTML=total.toFixed(2)+'s <span class="done-avg">'+(total/order.length).toFixed(2)+'s/chord · '+acc+'% acc</span>';
 
@@ -731,6 +763,7 @@ async function finish(){
 
   renderSplits();
   await refreshBoard(rank, top);
+  await renderTrend(modeKey());   // your times for this mode over time — render before snapshotting the done view
 
   sessionRuns[modeKey()]={ doneHTML:doneWrap.innerHTML, timeText:hTime.textContent, progText:hProg.textContent };
 }
@@ -754,6 +787,92 @@ function renderSplits(){
 }
 function flash(){ stage.classList.remove("flash-good"); void stage.offsetWidth; stage.classList.add("flash-good"); }
 function flashBad(){ stage.classList.remove("flash-bad"); void stage.offsetWidth; stage.classList.add("flash-bad"); }
+
+/* ---------- Post-run progress chart: your times for this mode over time (same chart as the dashboard) ---------- */
+// full run history for a mode, oldest→newest — DB when logged in, localStorage for guests
+async function getModeHistory(mode){
+  if(currentSession){
+    const { data, error } = await supabase.from('scores').select('time_ms, played_at, created_at').eq('mode', mode);
+    if(error){ console.error('getModeHistory', error); return []; }
+    return data.map(r => ({ t:r.time_ms/1000, d:r.played_at || r.created_at }))
+               .sort((a,b) => String(a.d).localeCompare(String(b.d)));
+  }
+  return [...localHistory(mode)].sort((a,b) => String(a.d).localeCompare(String(b.d))).map(r => ({ t:r.t, d:r.d }));
+}
+async function renderTrend(mode){
+  const chartEl=$('trendChart'), empty=$('trendEmpty'), pr=$('trendPr');
+  if(!chartEl) return;
+  const hist=await getModeHistory(mode);
+  if(!hist.length){ pr.innerHTML=''; chartEl.innerHTML=''; empty.textContent='no runs yet'; empty.style.display='block'; return; }
+  empty.style.display='none';
+  const series=hist.map((r,i)=>({ i:i+1, t:r.t }));
+  const best=Math.min(...series.map(d=>d.t));
+  pr.innerHTML='<span>🏆 personal record <b>'+best.toFixed(2)+'s</b></span>';
+
+  const W=700,H=300,padL=48,padR=18,padT=18,padB=40;
+  const n=series.length, xMin=1, xMax=Math.max(n,2);
+  let yMin=Math.min(...series.map(d=>d.t)), yMax=Math.max(...series.map(d=>d.t));
+  if(yMin===yMax){ yMin=Math.max(0,yMin-1); yMax=yMax+1; }
+  const yp=(yMax-yMin)*0.12; yMin=Math.max(0,yMin-yp); yMax=yMax+yp;
+  const X=i=>padL+((i-xMin)/((xMax-xMin)||1))*(W-padL-padR);
+  const Y=t=>padT+(1-(t-yMin)/((yMax-yMin)||1))*(H-padT-padB);
+
+  let grid='', ylabs='';
+  for(let k=0;k<=4;k++){
+    const t=yMin+(yMax-yMin)*k/4, y=Y(t);
+    grid+=`<line class="grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"/>`;
+    ylabs+=`<text class="ylab" x="${padL-8}" y="${(y+3.5).toFixed(1)}">${t.toFixed(0)}s</text>`;
+  }
+  let xlabs='';
+  const step=Math.max(1,Math.ceil(n/6));
+  const marks=new Set(); for(let i=1;i<=n;i+=step) marks.add(i); marks.add(n);
+  marks.forEach(i=>{ xlabs+=`<text class="xlab" x="${X(i).toFixed(1)}" y="${H-padB+20}">${i}</text>`; });
+
+  const baseY=H-padB;
+  const path=series.map((d,k)=>(k?'L':'M')+X(d.i).toFixed(1)+' '+Y(d.t).toFixed(1)).join(' ');
+  const pts=series.map(d=>{
+    const cx=X(d.i).toFixed(1), cy=Y(d.t).toFixed(1), label='#'+d.i+' · '+d.t.toFixed(2)+'s';
+    return `<g class="pt" data-cx="${cx}" data-cy="${cy}" data-label="${label}">`
+      + `<circle class="hit" cx="${cx}" cy="${cy}" r="16"/>`
+      + `<circle class="dot" cx="${cx}" cy="${cy}" r="4.5"/></g>`;
+  }).join('');
+  const xtitle=`<text class="axis-title" x="${((padL+(W-padR))/2).toFixed(1)}" y="${H-6}">run #</text>`;
+
+  chartEl.innerHTML =
+    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="completion time over runs">`
+    + grid
+    + `<line class="crosshair" style="display:none"/>`
+    + `<path class="line" d="${path}"/>`
+    + pts + ylabs + xlabs + xtitle
+    + `<g class="tip" style="display:none"><rect rx="6" ry="6" height="22"/><text></text></g>`
+    + `</svg>`;
+
+  // hover: grow the dot, show a value tooltip, drop a crosshair to the axis (same as dashboard)
+  const svg=chartEl.querySelector('svg');
+  const tip=svg.querySelector('.tip'), tipRect=tip.querySelector('rect'), tipText=tip.querySelector('text');
+  const cross=svg.querySelector('.crosshair');
+  svg.querySelectorAll('.pt').forEach(g=>{
+    const dot=g.querySelector('.dot');
+    const cx=parseFloat(g.dataset.cx), cy=parseFloat(g.dataset.cy), label=g.dataset.label;
+    g.addEventListener('mouseenter', ()=>{
+      dot.setAttribute('r','7.5');
+      cross.setAttribute('x1',cx); cross.setAttribute('x2',cx);
+      cross.setAttribute('y1',cy.toFixed(1)); cross.setAttribute('y2',baseY);
+      cross.style.display='';
+      tipText.textContent=label;
+      const w=label.length*7.2+18, half=w/2;
+      const tx=Math.max(padL+half, Math.min(W-padR-half, cx));
+      const above = cy-36 > 2;
+      tipRect.setAttribute('x',(tx-half).toFixed(1));
+      tipRect.setAttribute('y',(above?cy-34:cy+12).toFixed(1));
+      tipRect.setAttribute('width',w.toFixed(1));
+      tipText.setAttribute('x',tx.toFixed(1));
+      tipText.setAttribute('y',(above?cy-19:cy+27).toFixed(1));
+      tip.style.display='';
+    });
+    g.addEventListener('mouseleave', ()=>{ dot.setAttribute('r','4.5'); tip.style.display='none'; cross.style.display='none'; });
+  });
+}
 
 /* ---------- Score storage: DB when logged in, localStorage when guest ---------- */
 async function getTop(mode){
@@ -786,13 +905,14 @@ async function addScore(mode, timeMs, chordCount, playedAt, splits, errors){
     localAddScore(mode, timeMs, playedAt, chordCount, errors);   // guests: DB-only splits, so heatmap is a logged-in feature
   }
 }
-function localKey(mode){ return 'chordrushTop5:'+mode; }
-function localTop(mode){ try{ const a=JSON.parse(localStorage.getItem(localKey(mode))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function localKey(mode){ return 'chordrushTop5:'+mode; }                 // key name kept for back-compat
+function localHistory(mode){ try{ const a=JSON.parse(localStorage.getItem(localKey(mode))); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function localTop(mode){ return [...localHistory(mode)].sort((a,b)=>a.t-b.t).slice(0,MAX_TOP); }   // board = best-N by time, derived
 function localAddScore(mode, timeMs, playedAt, chordCount, errors){
-  const arr=localTop(mode);
-  arr.push({ t:timeMs/1000, d:playedAt, c:chordCount, er:errors });   // d = finish time, becomes played_at on migration
-  arr.sort((a,b)=>a.t-b.t);
-  localStorage.setItem(localKey(mode), JSON.stringify(arr.slice(0,MAX_TOP)));
+  const arr=localHistory(mode);
+  arr.push({ t:timeMs/1000, d:playedAt, c:chordCount, er:errors });      // keep EVERY run, chronological (d = played_at)
+  if(arr.length>LOCAL_MAX) arr.splice(0, arr.length-LOCAL_MAX);          // safety cap: keep the most recent
+  localStorage.setItem(localKey(mode), JSON.stringify(arr));
 }
 function migrateLegacy(){   // old local keys → current local key (guest history only)
   const mk=localKey('major');
@@ -828,8 +948,8 @@ async function migrateLocalToAccount(){
   // This still merges guest play for EXISTING accounts (no data discarded).
   const rows=[];
   for(const mode of modes){
-    for(const e of localTop(mode)){
-      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count:countForMode(mode), played_at:e.d });
+    for(const e of localHistory(mode)){   // migrate the FULL run history, not just the top-5 board
+      rows.push({ user_id:uid, mode, time_ms:Math.round(e.t*1000), chord_count:countForMode(mode), played_at:e.d, errors:e.er ?? null });
     }
     localStorage.removeItem(localKey(mode));
   }
@@ -841,7 +961,7 @@ async function migrateLocalToAccount(){
     // insert failed → restore local so nothing is lost; it'll retry next login
     console.error('migrate insert', error);
     const byMode={};
-    for(const r of rows){ const g = byMode[r.mode] || (byMode[r.mode]=[]); g.push({ t:r.time_ms/1000, d:r.played_at }); }
+    for(const r of rows){ const g = byMode[r.mode] || (byMode[r.mode]=[]); g.push({ t:r.time_ms/1000, d:r.played_at, er:r.errors }); }
     for(const mode in byMode) localStorage.setItem(localKey(mode), JSON.stringify(byMode[mode]));
   }
 }
