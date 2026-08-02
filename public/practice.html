@@ -147,6 +147,7 @@
 
   <div class="modal-overlay" id="pickModal" hidden>
     <div class="modal pick-modal">
+      <button class="modal-close" id="pickClose" aria-label="Close">&times;</button>
       <div class="pick-title">Pick today's set</div>
       <div class="pick-sub">tap a column — one chord type + voicing — your weakest is pre-picked · redder = slower</div>
       <div class="pick-hmwrap">
@@ -464,6 +465,10 @@ $('pickStart').onclick = ()=>{
   startLesson(keys);
 };
 $('changeChords').onclick = openPicker;
+// close the picker: if a lesson's already active, just cancel back to it; otherwise accept the pre-picked set
+function closePicker(){ if(struggle.length){ $('pickModal').hidden = true; } else { $('pickStart').click(); } }
+$('pickClose').onclick = closePicker;
+document.addEventListener('keydown', e => { if(e.key==='Escape' && !$('pickModal').hidden) closePicker(); });
 
 /* ---------- MIDI ---------- */
 async function initMidi(){
