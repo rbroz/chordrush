@@ -53,6 +53,22 @@
   .pick-heatmap td[data-col]:hover { outline: 2px solid var(--line); outline-offset: 1px; }
   .bucket-badge { font-family: var(--mono); font-weight: 700; font-size: 22px; color: var(--text); }
   .bucket-sub { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 7px; letter-spacing: .01em; }
+  .plan-view { margin: 3vh auto 4vh; }
+  .plan-hdr { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
+  .plan-hm { border-collapse: separate; border-spacing: 3px; margin: 0 auto; }
+  .plan-hm tbody th { font-weight: 400; font-size: 12px; color: var(--muted); text-align: right; padding-right: 9px; }
+  .plan-hm thead th { font-weight: 400; font-size: 11px; color: var(--muted); padding: 0 0 7px; }
+  .plan-hm td { width: 32px; height: 32px; border-radius: 5px; background: #f1efec; }
+  .hm-tip { position: fixed; z-index: 20; pointer-events: none; background: #2b2b2b; color: #fff; font-size: 12px; padding: 5px 9px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -135%); }
+  .prac-warmup { margin-top: 6vh; }
+  .warm-hdr { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 26px; }
+  .warm-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; max-width: 760px; margin: 0 auto 5vh; }
+  .warm-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 14px 10px; border: 1px solid var(--line); border-radius: 12px; transition: background .08s, border-color .08s; }
+  .warm-card.played { border-color: var(--accent); }
+  .warm-card.lit { background: var(--accent); border-color: var(--accent); }
+  .warm-card.lit .warm-name { color: #fff; }
+  .warm-kbd svg { display: block; height: 66px; width: auto; }
+  .warm-name { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--text); }
   .pick-hmwrap { position: relative; width: fit-content; margin: 0 auto; }
   .pick-colbox { position: absolute; border: 2.5px solid var(--accent); border-radius: 8px; pointer-events: none; box-sizing: border-box; transition: left .08s, top .08s, width .08s, height .08s; }
   .pick-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; }
@@ -106,19 +122,20 @@
         <span class="dot" id="statusDot"></span>
         <span class="status-text" id="statusText">connecting…</span>
       </div>
-      <div class="goal-ctrl">
-        <span class="goal-lab">goal · seconds per chord</span>
-        <div class="goal-stepper">
-          <button type="button" id="goalDown" aria-label="lower goal">−</button>
-          <span id="goalVal">2.0</span>
-          <button type="button" id="goalUp" aria-label="raise goal">+</button>
-        </div>
-      </div>
-      <button type="button" class="keys-toggle" id="keysToggle">🎹 key hints: on</button>
-      <div class="prompt-label">today's set</div>
-      <div class="struggle-row" id="struggleRow"></div>
-      <button class="start-btn" id="drillStart">start drill</button>
+      <div id="planView" class="plan-view"></div>
+      <div class="hm-tip" id="planTip" style="display:none"></div>
+      <button class="start-btn" id="warmStart">start warmup</button>
       <button type="button" class="drill-back" id="changeChords">← change chords</button>
+    </div>
+
+    <!-- warmup: play each shape to light it up, no timing -->
+    <div class="prac-warmup" id="pracWarmup" hidden>
+      <div class="warm-hdr">warmup — play each shape to light it up</div>
+      <div class="warm-grid" id="warmGrid"></div>
+      <div class="drill-btns">
+        <button class="start-btn" id="warmToDrill">start drill →</button>
+        <button type="button" class="drill-back" id="warmBack">← back</button>
+      </div>
     </div>
 
     <!-- the drill -->
@@ -318,12 +335,12 @@ loginForm.addEventListener('submit', handleLogin);
 $('gateLogin').onclick = () => openModal('login');
 
 /* ---------- state ---------- */
-let struggle = [], cur = null, curIdx = -1, landings = [], reps = 0, running = false, started = false, lastTime = 0, showKeys = true;
+let struggle = [], cur = null, curIdx = -1, landings = [], reps = 0, running = false, started = false, lastTime = 0, showKeys = true, warming = false;
 const WINDOW = 5, GOAL_MIN = 0.5, GOAL_MAX = 5.0, GOAL_STEP = 0.25;
 let targetSec = 2.0;
 const held = new Map();
 let picked = new Set(), pickAvg = {};   // picker: selected chord keys + per-chord all-time avg
-const SECTIONS = ['pracGate','pracEmpty','pracIntro','pracDrill','pracDone'];
+const SECTIONS = ['pracGate','pracEmpty','pracIntro','pracWarmup','pracDrill','pracDone'];
 function show(id){ SECTIONS.forEach(s => { const el=$(s); if(el) el.hidden = (s!==id); }); }
 function setStatus(on, t){ $('statusDot').classList.toggle('on', !!on); $('statusText').textContent = t; }
 
@@ -363,7 +380,8 @@ const HM_COLS = [
 // column-based selection: one chord type × voicing (a whole "bucket") at a time
 const TYPE_L = { major:'majors', minor:'minors' };
 const INV_L  = { root:'root', '1st':'1st inv', '2nd':'2nd inv' };
-let selectedCol = null, struggleWeights = [];
+let selectedCol = null, struggleWeights = [], struggleKeys = [], lessonKeys = [];
+let planBaseline = {}, planProgress = {};   // "then" = frozen avg at plan creation; "now" = drill times since
 const colKeys  = idx => { const c=HM_COLS[idx]; return HM_ROOTS.map(r => r+' '+c.type+' '+c.inv); };
 const colLabel = idx => { const c=HM_COLS[idx]; return TYPE_L[c.type]+' · '+INV_L[c.inv]; };
 // weakest column = slowest average among the ones you've actually played
@@ -439,6 +457,28 @@ window.addEventListener('resize', refreshColbox);
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
 function loadLesson(){ try{ const l=JSON.parse(localStorage.getItem('chordrush:practiceLesson')); return (l && l.date===todayKey() && Array.isArray(l.keys) && l.keys.length) ? l.keys : null; }catch(e){ return null; } }
 function saveLesson(keys){ try{ localStorage.setItem('chordrush:practiceLesson', JSON.stringify({ date: todayKey(), keys })); }catch(e){} }
+
+// a "plan" = the selected column. baseline is frozen when the plan is first set; progress accrues from drills
+// until you switch columns. identity is the set of keys, so re-picking the same column keeps your progress.
+const planId = keys => keys.slice().sort().join('|');
+function ensurePlan(keys){
+  let stored = null; try{ stored = JSON.parse(localStorage.getItem('chordrush:practicePlan')); }catch(e){}
+  if(stored && stored.id === planId(keys) && stored.baseline){
+    planBaseline = stored.baseline; planProgress = stored.progress || {};
+  } else {
+    planBaseline = {};                                            // freeze current all-time avgs as the "then" bar
+    for(const k of keys){ if(pickAvg[k]) planBaseline[k] = pickAvg[k].ms; }
+    planProgress = {};                                            // fresh column → start progress over
+    savePlan(keys);
+  }
+}
+function savePlan(keys){ try{ localStorage.setItem('chordrush:practicePlan', JSON.stringify({ id: planId(keys), baseline: planBaseline, progress: planProgress })); }catch(e){} }
+function recordProgress(key, ms){                                 // one drill landing → running avg for the "now" bar
+  if(!key) return;
+  const p = planProgress[key] || (planProgress[key] = { sum: 0, n: 0 });
+  p.sum += ms; p.n++;
+  savePlan(lessonKeys);
+}
 function applyPicked(keys){                                         // saved keys are a column → re-select it
   const c0 = keys.length ? chordFromKey(keys[0]) : null;
   if(!c0) return;
@@ -449,14 +489,38 @@ function startLesson(keys){
   // build the drill set + per-chord weakness weights (slower avg → more likely; unplayed = weakest)
   const known = keys.map(k => pickAvg[k]?.ms).filter(v => v != null);
   const heavy = known.length ? Math.max(...known) * 1.3 : 1;
-  struggle = []; struggleWeights = [];
-  for(const k of keys){ const c = chordFromKey(k); if(c){ struggle.push(c); struggleWeights.push(pickAvg[k]?.ms ?? heavy); } }
+  struggle = []; struggleWeights = []; struggleKeys = [];
+  for(const k of keys){ const c = chordFromKey(k); if(c){ struggle.push(c); struggleKeys.push(k); struggleWeights.push(pickAvg[k]?.ms ?? heavy); } }
   if(!struggle.length){ openPicker(); return; }   // stored keys went bad → fall back to the picker
-  const c0 = chordFromKey(keys[0]);
-  const label = c0 ? TYPE_L[c0.type] + ' · ' + (c0.inv ? INV_KEY[c0.inv]+' inv' : 'root') : '';
-  $('struggleRow').innerHTML = `<div class="bucket-badge">${label}<span class="bucket-sub">${struggle.length} chords · weak ones come up more</span></div>`;
+  lessonKeys = keys.slice();
+  ensurePlan(lessonKeys);
+  renderPlan();
   $('pickModal').hidden = true;
   show('pracIntro');
+}
+// two standard heatmap columns: "then" (frozen at plan creation) vs "now" (drills since) — progress at a glance
+function renderPlan(){
+  const el = $('planView'); if(!el) return;
+  const c0 = lessonKeys.length ? chordFromKey(lessonKeys[0]) : null;
+  if(!c0){ el.innerHTML = ''; return; }
+  const base = k => planBaseline[k] != null ? planBaseline[k] : (pickAvg[k]?.ms ?? null);
+  const prog = k => { const p = planProgress[k]; return p && p.n ? p.sum / p.n : null; };
+  // one shared scale across both bars, so a "now" cell lighter than its "then" = you actually got faster
+  const vals = [];
+  for(const k of lessonKeys){ const b = base(k); if(b != null) vals.push(b); const p = prog(k); if(p != null) vals.push(p); }
+  const min = vals.length ? Math.min(...vals) : 0, max = vals.length ? Math.max(...vals) : 1;
+  const span = max > min ? max - min : 1;
+  const cell = v => v == null ? 'background:#f1efec' : 'background:hsl(18,85%,' + (90 - ((v - min) / span) * 45).toFixed(0) + '%)';
+  const sec = v => v == null ? '—' : (v / 1000).toFixed(2) + 's';
+  let rows = '';
+  for(const k of lessonKeys){
+    const root = k.split(' ').slice(0, -2).join(' '), bv = base(k), pv = prog(k);
+    rows += '<tr><th>' + root + '</th>'
+      + '<td data-tip="' + root + ' · then · ' + sec(bv) + '" style="' + cell(bv) + '"></td>'
+      + '<td data-tip="' + root + ' · now · ' + (pv == null ? 'no drills yet' : sec(pv)) + '" style="' + cell(pv) + '"></td></tr>';
+  }
+  el.innerHTML = '<div class="plan-hdr"><div>' + TYPE_L[c0.type] + '</div><div>' + (c0.inv ? INV_KEY[c0.inv] : 'root') + '</div></div>'
+    + '<table class="plan-hm"><thead><tr><th></th><th>then</th><th>now</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 $('pickStart').onclick = ()=>{
   const keys=[...picked];
@@ -465,6 +529,19 @@ $('pickStart').onclick = ()=>{
   startLesson(keys);
 };
 $('changeChords').onclick = openPicker;
+// instant tooltip that follows the cursor (same as the dashboard heatmap), delegated so it survives re-renders
+(() => {
+  const view = $('planView'), tip = $('planTip'); if(!view || !tip) return;
+  view.addEventListener('mousemove', e => {
+    const td = e.target.closest('td[data-tip]');
+    if(!td){ tip.style.display = 'none'; return; }
+    tip.textContent = td.dataset.tip;
+    tip.style.left = e.clientX + 'px';
+    tip.style.top  = e.clientY + 'px';
+    tip.style.display = 'block';
+  });
+  view.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+})();
 // close the picker: if a lesson's already active, just cancel back to it; otherwise accept the pre-picked set
 function closePicker(){ if(struggle.length){ $('pickModal').hidden = true; } else { $('pickStart').click(); } }
 $('pickClose').onclick = closePicker;
@@ -488,14 +565,28 @@ function onMidi(ev){
   if(cmd===0x90 && d2>0) held.set(d1,d2);
   else if(cmd===0x80 || (cmd===0x90 && d2===0)) held.delete(d1);
   if(running) checkMatch();
+  else if(warming) checkWarmup();
+}
+// does the currently-held set voice this exact chord (right notes + right bass for inversions)?
+function matchesChord(notes, c){
+  if(!notes.length) return false;
+  const tgt = new Set(c.pcs), h = new Set(notes.map(n => n%12));
+  if(h.size !== tgt.size) return false;
+  for(const p of tgt) if(!h.has(p)) return false;
+  if(c.bass != null && (Math.min(...notes)%12) !== c.bass) return false;
+  return true;
 }
 function checkMatch(){
-  const notes = [...held.keys()]; if(!notes.length || !cur) return;
-  const tgt = new Set(cur.pcs), h = new Set(notes.map(n => n%12));
-  if(h.size !== tgt.size) return;
-  for(const p of tgt) if(!h.has(p)) return;
-  if(cur.bass != null && (Math.min(...notes)%12) !== cur.bass) return;   // inversions need the right bass
-  advance();
+  if(cur && matchesChord([...held.keys()], cur)) advance();
+}
+// warmup: light up whichever shape you're currently holding; mark it played once you've hit it
+function checkWarmup(){
+  const notes = [...held.keys()], cards = $('warmGrid').children;
+  for(let i = 0; i < struggle.length; i++){
+    const on = matchesChord(notes, struggle[i]);
+    cards[i].classList.toggle('lit', on);
+    if(on) cards[i].classList.add('played');
+  }
 }
 
 /* ---------- drill: cycle the 3 chords randomly until the last-5 avg beats the target ---------- */
@@ -510,7 +601,17 @@ function pickChord(){
   if(i >= n) i = n - 1;
   curIdx = i; return struggle[i];
 }
+// warmup: show every shape in the set; play any of them to light it up. no clock, no scoring.
+function startWarmup(){
+  running = false; warming = true;
+  $('warmGrid').innerHTML = struggle.map((c, i) =>
+    '<div class="warm-card" data-idx="' + i + '"><div class="warm-kbd">' + keyboardSVG(c) + '</div>'
+    + '<div class="warm-name">' + c.name + '</div></div>'
+  ).join('');
+  show('pracWarmup');
+}
 function startDrill(){
+  warming = false;
   landings = []; reps = 0; running = true; started = false;
   $('drillGoal').textContent = 'goal: last-5 avg under ' + fmtGoal(targetSec) + 's/chord';
   $('pracKbd').style.display = showKeys ? '' : 'none';   // honor the key-hints toggle
@@ -523,7 +624,7 @@ function showRep(){ $('pracChord').innerHTML = cur.name + (cur.inv ? '<span clas
 function advance(){
   const now = performance.now();
   if(!started){ started = true; lastTime = now; }          // first chord = go-signal, starts the clock
-  else { landings.push(now - lastTime); lastTime = now; reps++; }
+  else { const dt = now - lastTime; landings.push(dt); lastTime = now; reps++; recordProgress(struggleKeys[curIdx], dt); }
   updateHud();
   if(landings.length >= WINDOW){                            // once we have a full window, check the target
     const avg = landings.slice(-WINDOW).reduce((s,x)=>s+x,0)/WINDOW;
@@ -546,25 +647,21 @@ function finish(avg){
 
 /* ---------- adjustable goal ---------- */
 const fmtGoal = v => { const s = v.toFixed(2); return s.endsWith('0') ? s.slice(0,-1) : s; };
-function renderGoal(){ $('goalVal').textContent = fmtGoal(targetSec); }
-function setGoal(delta){ targetSec = Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.round((targetSec+delta)/GOAL_STEP)*GOAL_STEP)); renderGoal(); }
-$('goalUp').onclick   = () => setGoal(GOAL_STEP);
-$('goalDown').onclick = () => setGoal(-GOAL_STEP);
-renderGoal();
+// goal (targetSec) and key-hints (showKeys) now use fixed defaults — controls removed from the intro
 
-function renderKeysToggle(){ const b=$('keysToggle'); b.textContent = showKeys ? '🎹 key hints: on' : 'key hints: off'; b.classList.toggle('off', !showKeys); }
-$('keysToggle').onclick = () => { showKeys = !showKeys; renderKeysToggle(); };
-renderKeysToggle();
-
-$('drillStart').onclick   = startDrill;
+const toIntro = () => { running = false; warming = false; renderPlan(); show('pracIntro'); };   // re-render so the "now" bar picks up fresh drill times
+$('warmStart').onclick    = startWarmup;
+$('warmToDrill').onclick  = startDrill;
+$('warmBack').onclick     = toIntro;
 $('drillRestart').onclick = startDrill;
-$('drillAgain').onclick   = () => show('pracIntro');
-$('drillBack').onclick    = () => { running = false; show('pracIntro'); };
+$('drillAgain').onclick   = toIntro;
+$('drillBack').onclick    = () => { running = false; toIntro(); };
 document.addEventListener('keydown', e => {   // spacebar: start from the intro, "next" from the done screen
   if(e.code !== 'Space' || !authModal.hidden) return;
   if(!$('pickModal').hidden){ e.preventDefault(); $('pickStart').click(); }   // picker open → "Drill these"
-  else if(!$('pracIntro').hidden){ e.preventDefault(); startDrill(); }
-  else if(!$('pracDone').hidden){ e.preventDefault(); show('pracIntro'); }
+  else if(!$('pracIntro').hidden){ e.preventDefault(); startWarmup(); }       // intro → warmup
+  else if(!$('pracWarmup').hidden){ e.preventDefault(); startDrill(); }        // warmup → drill
+  else if(!$('pracDone').hidden){ e.preventDefault(); toIntro(); }
 });
 </script>
 </body>
