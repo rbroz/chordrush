@@ -14,16 +14,21 @@
   .lb-wrap { max-width: 1120px; margin: 4vh auto 0; }
   .lb-heading { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 28px; }
   .lb-loading { text-align: center; color: var(--muted); padding: 40px 0; }
-  .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; }
+  .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 22px; }
   .lb-card { border: 1px solid var(--line); border-radius: 12px; padding: 15px 16px 9px; }
   .lb-card.empty { opacity: .5; }
   .lb-card-title { font-size: 11px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
-  .lb-row { display: flex; align-items: center; gap: 10px; padding: 6px 2px; font-size: 14px; border-top: 1px solid var(--line); }
+  .lb-row { display: flex; align-items: center; gap: 12px; padding: 6px 2px; font-size: 13px; border-top: 1px solid var(--line); }
   .lb-row:first-of-type { border-top: 0; }
-  .lb-row .r { width: 16px; color: var(--muted); flex: none; }
+  .lb-row .r { width: 12px; color: var(--muted); flex: none; }
   .lb-row .w { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-  .lb-row .t { color: var(--text); font-variant-numeric: tabular-nums; flex: none; }
+  .lb-row .t { width: 48px; text-align: right; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+  .lb-row .pc, .lb-row .ac, .lb-row .dt { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; flex: none; }
+  .lb-row .pc { width: 48px; }
+  .lb-row .ac { width: 30px; }
+  .lb-row .dt { width: 40px; }
   .lb-row.top1 .r, .lb-row.top1 .t { color: var(--accent); font-weight: 700; }
+  .lb-head span { color: var(--muted) !important; font-weight: 400 !important; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
   .lb-card-empty { font-size: 13px; color: var(--muted); padding: 6px 2px 10px; }
   .lb-filters { display: flex; justify-content: center; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
   .lb-title { text-align: center; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 16px; }
@@ -106,8 +111,14 @@ async function loadAll(){
   });
   $('lbGrid').innerHTML = modes.map(m => {
     const rs = byMode.get(m).sort((x, y) => x.rank - y.rank);
-    const body = rs.map(r => `<div class="lb-row${r.rank===1?' top1':''}"><span class="r">${r.rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${(r.time_ms/1000).toFixed(2)}s</span></div>`).join('');
-    return `<div class="lb-card"><div class="lb-card-title">${labelForMode(m)}</div>${body}</div>`;
+    const body = rs.map(r => {
+      const t = r.time_ms/1000, cc = r.chord_count || 12;
+      const acc = r.errors == null ? '—' : Math.round(cc/(cc+r.errors)*100)+'%';
+      let date=''; try{ date=new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
+      return `<div class="lb-row${r.rank===1?' top1':''}"><span class="r">${r.rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${t.toFixed(2)}s</span><span class="pc">${(t/cc).toFixed(2)}/ch</span><span class="ac">${acc}</span><span class="dt">${date}</span></div>`;
+    }).join('');
+    const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">time</span><span class="pc">/ch</span><span class="ac">acc</span><span class="dt">date</span></div>';
+    return `<div class="lb-card"><div class="lb-card-title">${labelForMode(m)}</div>${head}${body}</div>`;
   }).join('');
 }
 
