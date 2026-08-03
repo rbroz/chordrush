@@ -52,9 +52,18 @@ body {
 .filterbars { display:flex; gap:14px; justify-content:center; align-items:flex-end; flex-wrap:wrap; margin-top:7vh; }
 .filter-group { display:flex; flex-direction:column; align-items:center; gap:6px; }
 .fg-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+/* triads + 7ths are mutually exclusive → one connected pill, divided, each label centered over its group */
+.type-combo { display:inline-flex; align-items:stretch; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:5px; }
+.type-combo.locked { opacity:.4; pointer-events:none; }
+.type-seg { position:relative; display:flex; align-items:center; gap:4px; padding:0 4px; }
+.type-seg .fg-label { position:absolute; top:-20px; left:0; right:0; text-align:center; }
+.type-div { width:1px; align-self:stretch; background:var(--line); margin:3px 3px; }
+/* × between the type pill and voicing = "type compounds with voicing" */
+.combo-x { align-self:flex-end; margin-bottom:12px; font-size:20px; color:var(--muted); user-select:none; }
 .test-summary { text-align:center; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:18px 0 0; }
 .inv-tag { display:block; font-size:15px; font-weight:600; color:var(--accent); letter-spacing:.04em; margin-top:8px; text-align:center; }
-.dash-section .filterbars { margin:0 auto 20px; }
+/* keep the filter row on one line even though the card is only 720px — break out and center, chart stays 720 */
+.dash-section .filterbars { margin:0 0 20px; position:relative; left:50%; transform:translateX(-50%); width:max-content; flex-wrap:nowrap; }
 .dash-section .filterbars .filterbar { margin:0; }
 .filter { font-family:var(--mono); font-size:14px; color:var(--muted); background:transparent; border:0;
           border-radius:8px; padding:7px 16px; cursor:pointer; transition:color .12s, background .12s, box-shadow .12s; }

@@ -123,21 +123,25 @@
         <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
         <button id="soundBtn" type="button"></button>
       </div>
-      <div class="filter-group">
-        <span class="fg-label">triads</span>
-        <div class="filterbar" id="filterbar">
-          <button class="filter" data-type="major">majors</button>
-          <button class="filter" data-type="minor">minors</button>
+      <div class="type-combo" id="typeCombo">
+        <div class="type-seg">
+          <span class="fg-label">triads</span>
+          <div class="type-btns">
+            <button class="filter" data-type="major">majors</button>
+            <button class="filter" data-type="minor">minors</button>
+          </div>
+        </div>
+        <span class="type-div" aria-hidden="true"></span>
+        <div class="type-seg">
+          <span class="fg-label">7ths</span>
+          <div class="type-btns">
+            <button class="filter" data-type="maj7">maj7</button>
+            <button class="filter" data-type="min7">min7</button>
+            <button class="filter" data-type="dom7">dom7</button>
+          </div>
         </div>
       </div>
-      <div class="filter-group">
-        <span class="fg-label">7ths</span>
-        <div class="filterbar" id="filterbar7">
-          <button class="filter" data-type="maj7">maj7</button>
-          <button class="filter" data-type="min7">min7</button>
-          <button class="filter" data-type="dom7">dom7</button>
-        </div>
-      </div>
+      <span class="combo-x" aria-hidden="true">×</span>
       <div class="filter-group">
         <span class="fg-label">voicing</span>
         <div class="filterbar" id="invbar">
@@ -378,7 +382,7 @@ const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$
 const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest"), hErr=$("hErr");
 const filterbar=$("filterbar"), invbar=$("invbar");
-const lockFilters = on => document.querySelectorAll('.filterbars .filterbar').forEach(b => b.classList.toggle('locked', on));
+const lockFilters = on => document.querySelectorAll('.filterbars .filterbar, .filterbars .type-combo').forEach(b => b.classList.toggle('locked', on));
 // done-screen tabs (progress chart / chord splits) — delegated so it survives the session-restore innerHTML swap
 doneWrap.addEventListener('click', e => {
   const b = e.target.closest('.done-tab'); if(!b) return;
@@ -579,18 +583,17 @@ function markMiss(){
 /* ---------- Filter bar ---------- */
 function toggleType(type){
   if(phase==="running") return;                          // locked only once the clock is running
-  if(enabled[type] && enabledTypes().length===1) return; // keep at least one type on
-  enabled[type]=!enabled[type];
+  if(enabled[type] && enabledTypes().length===1) return; // already the sole pick → no-op
+  for(const t in CHORD_TYPES) enabled[t]=false;          // single-select: one chord type at a time (triads & 7ths mutually exclusive)
+  enabled[type]=true;
   reconfigure();
 }
 function toggleInv(i){
   if(phase==="running") return;
-  if(freestyle){                                         // leaving freestyle → switch to just this inversion
-    freestyle=false; enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[i]=true;
-    reconfigure(); return;
-  }
-  if(enabledInv[i] && enabledInvs().length===1) return;  // keep at least one inversion on
-  enabledInv[i]=!enabledInv[i];
+  if(!freestyle && enabledInv[i] && enabledInvs().length===1) return;  // already the sole pick → no-op
+  freestyle=false;                                                     // single-select: one voicing at a time
+  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;
+  enabledInv[i]=true;
   reconfigure();
 }
 function toggleFreestyle(){

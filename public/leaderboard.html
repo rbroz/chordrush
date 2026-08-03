@@ -100,7 +100,8 @@ async function loadAll(){
   const rows = error ? [] : (data || []);
   const byMode = new Map();
   for(const r of rows){
-    if(r.mode.endsWith('|free')) continue;                 // freestyle was removed from the UI
+    // only boards you can still create: one chord type × one voicing (no multi-type "+", no multi-voicing ",", no freestyle)
+    if(r.mode.includes('+') || r.mode.includes(',') || r.mode.endsWith('|free')) continue;
     if(!byMode.has(r.mode)) byMode.set(r.mode, []);
     byMode.get(r.mode).push(r);
   }

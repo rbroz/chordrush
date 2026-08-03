@@ -63,21 +63,25 @@
       <div class="dash-section">
         <div class="dash-title">completion time by game</div>
         <div class="filterbars">
-          <div class="filter-group">
-            <span class="fg-label">triads</span>
-            <div class="filterbar" id="typeToggle">
-              <button class="filter active" data-type="major">majors</button>
-              <button class="filter" data-type="minor">minors</button>
+          <div class="type-combo" id="typeCombo">
+            <div class="type-seg">
+              <span class="fg-label">triads</span>
+              <div class="type-btns">
+                <button class="filter active" data-type="major">majors</button>
+                <button class="filter" data-type="minor">minors</button>
+              </div>
+            </div>
+            <span class="type-div" aria-hidden="true"></span>
+            <div class="type-seg">
+              <span class="fg-label">7ths</span>
+              <div class="type-btns">
+                <button class="filter" data-type="maj7">maj7</button>
+                <button class="filter" data-type="min7">min7</button>
+                <button class="filter" data-type="dom7">dom7</button>
+              </div>
             </div>
           </div>
-          <div class="filter-group">
-            <span class="fg-label">7ths</span>
-            <div class="filterbar" id="type7Toggle">
-              <button class="filter" data-type="maj7">maj7</button>
-              <button class="filter" data-type="min7">min7</button>
-              <button class="filter" data-type="dom7">dom7</button>
-            </div>
-          </div>
+          <span class="combo-x" aria-hidden="true">×</span>
           <div class="filter-group">
             <span class="fg-label">voicing</span>
             <div class="filterbar" id="invToggle">
@@ -187,13 +191,15 @@ function fmtDuration(totalSec){
 
 // Filter toggles mirror the main page: keep at least one type and one inversion on.
 function toggleType(type){
-  if(enabled[type] && enabledTypes().length===1) return;
-  enabled[type]=!enabled[type];
+  if(enabled[type] && enabledTypes().length===1) return;   // already the sole pick → no-op
+  for(const t in enabled) enabled[t]=false;                // single-select: one chord type at a time
+  enabled[type]=true;
   refresh();
 }
 function toggleInv(i){
-  if(enabledInv[i] && enabledInvs().length===1) return;
-  enabledInv[i]=!enabledInv[i];
+  if(enabledInv[i] && enabledInvs().length===1) return;    // already the sole pick → no-op
+  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;   // single-select: one voicing at a time
+  enabledInv[i]=true;
   refresh();
 }
 function refresh(){
