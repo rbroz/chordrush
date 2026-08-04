@@ -100,8 +100,8 @@ async function loadAll(){
   const rows = error ? [] : (data || []);
   const byMode = new Map();
   for(const r of rows){
-    // only boards you can still create: one chord type × one voicing (no multi-type "+", no multi-voicing ",", no freestyle)
-    if(r.mode.includes('+') || r.mode.includes(',') || r.mode.endsWith('|free')) continue;
+    // only boards you can still create: one chord type × one voicing (incl. "any voicing" = |free); hide multi-type "+" / multi-voicing ","
+    if(r.mode.includes('+') || r.mode.includes(',')) continue;
     if(!byMode.has(r.mode)) byMode.set(r.mode, []);
     byMode.get(r.mode).push(r);
   }

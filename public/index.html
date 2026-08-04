@@ -145,7 +145,8 @@
       <div class="filter-group">
         <span class="fg-label">voicing</span>
         <div class="filterbar" id="invbar">
-          <button class="filter" data-inv="0">root</button>
+          <button class="filter" id="freeBtn">any</button>
+          <button class="filter sep" data-inv="0">root</button>
           <button class="filter" data-inv="1">1st inv</button>
           <button class="filter" data-inv="2">2nd inv</button>
         </div>
@@ -598,7 +599,8 @@ function toggleInv(i){
 }
 function toggleFreestyle(){
   if(phase==="running") return;
-  freestyle=!freestyle;                                  // off → falls back to the current inversion picks (always >=1)
+  if(freestyle) return;                                  // already the sole pick → no-op (single-select)
+  freestyle=true;                                        // any-voicing; the inv picks stay preserved underneath
   reconfigure();
 }
 // A filter changed: rebuild the not-yet-started run, or refresh the idle/done stage.
@@ -617,12 +619,13 @@ function updateTestSummary(){
   const el=$('testSummary'); if(!el) return;
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(' + ');
   const invs = enabledInvs();
-  const voicing = (invs.length===1 && invs[0]===0) ? 'root' : invs.map(i=>INV_LABEL[i]).join('/');
+  const voicing = freestyle ? 'any voicing' : ((invs.length===1 && invs[0]===0) ? 'root' : invs.map(i=>INV_LABEL[i]).join('/'));
   el.textContent = types + ' · ' + voicing + ' · ' + countForMode(modeKey()) + ' chords';
 }
 async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
+  const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
   updateTestSummary();
   await refreshBoard();
 }
@@ -1080,6 +1083,7 @@ deviceSelect.onchange=e=>selectInput(e.target.value);
 $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
+$("freeBtn").onclick = toggleFreestyle;   // "any voicing" = freestyle (accept any inversion)
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);

@@ -85,7 +85,8 @@
           <div class="filter-group">
             <span class="fg-label">voicing</span>
             <div class="filterbar" id="invToggle">
-              <button class="filter active" data-inv="0">root</button>
+              <button class="filter" id="freeBtn">any</button>
+              <button class="filter sep active" data-inv="0">root</button>
               <button class="filter" data-inv="1">1st inv</button>
               <button class="filter" data-inv="2">2nd inv</button>
             </div>
@@ -122,10 +123,12 @@ const INV_LABEL  = ['root','1st inv','2nd inv','3rd inv'];
 // combination maps to a stored mode key (root-only → "major", else e.g. "major|0,1,2").
 const enabled    = { major:true, minor:false, maj7:false, min7:false, dom7:false };   // order matches Time Trials' CHORD_TYPES
 const enabledInv = { 0:true, 1:false, 2:false };
+let freestyle = false;   // "any voicing" mode → its own board ("major|free")
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
 const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
 function modeKey(){
   const t = enabledTypes().join('+');
+  if(freestyle) return t + '|free';
   const invs = enabledInvs();
   if(invs.length===1 && invs[0]===0) return t;
   return t + '|' + invs.join(',');
@@ -135,7 +138,7 @@ function labelForMode(m){
   const [typePart, invPart] = m.split('|');
   const types = typePart.split('+').map(t=>TYPE_LABEL[t]||t).join(' + ');
   if(!invPart)        return types;
-  if(invPart==='any') return types + ' · any voicing';
+  if(invPart==='free') return types + ' · any voicing';
   return types + ' · ' + invPart.split(',').map(i=>INV_LABEL[+i]).join('/');
 }
 
@@ -153,7 +156,8 @@ async function init(){
     new Date(a.played_at||a.created_at) - new Date(b.played_at||b.created_at));
 
   document.querySelectorAll('.filter[data-type]').forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
-  document.querySelectorAll('#invToggle .filter').forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
+  document.querySelectorAll('#invToggle .filter[data-inv]').forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
+  $('freeBtn').onclick = toggleFreestyle;
   renderKpis();
   refresh();          // sets active chips + mode + renders the line chart
   renderHeatmap();    // per-chord speed heatmap (independent of the toggles)
@@ -197,14 +201,21 @@ function toggleType(type){
   refresh();
 }
 function toggleInv(i){
-  if(enabledInv[i] && enabledInvs().length===1) return;    // already the sole pick → no-op
+  if(!freestyle && enabledInv[i] && enabledInvs().length===1) return;    // already the sole pick → no-op
+  freestyle=false;                                                       // leaving "any voicing"
   enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;   // single-select: one voicing at a time
   enabledInv[i]=true;
   refresh();
 }
+function toggleFreestyle(){
+  if(freestyle) return;                                                  // already the sole pick → no-op
+  freestyle=true;
+  refresh();
+}
 function refresh(){
   document.querySelectorAll('.filter[data-type]').forEach(b=>b.classList.toggle('active', !!enabled[b.dataset.type]));
-  document.querySelectorAll('#invToggle .filter').forEach(b=>b.classList.toggle('active', !!enabledInv[b.dataset.inv]));
+  document.querySelectorAll('#invToggle .filter[data-inv]').forEach(b=>b.classList.toggle('active', !freestyle && !!enabledInv[b.dataset.inv]));
+  const fb=$('freeBtn'); if(fb) fb.classList.toggle('active', freestyle);
   mode = modeKey();
   renderChart();
 }
