@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>About ChordRush — piano chord trainer for MIDI keyboards</title>
+<meta name="description" content="ChordRush is a free piano chord trainer for MIDI keyboards — a chord name appears and you play it against the clock, drilling triads, 7ths, and inversions until they're automatic.">
+<link rel="canonical" href="https://chordrush.app/about">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+<link rel="stylesheet" href="/style.css">
+<style>
+  .about { max-width: 640px; margin: 5vh auto 0; padding: 0 24px; text-align: left; }
+  .about h1 { font-size: 30px; font-weight: 700; color: var(--text); margin: 0 0 10px; }
+  .about .lede { font-size: 17px; color: var(--muted); line-height: 1.6; margin: 0 0 8px; }
+  .about h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 40px 0 12px; }
+  .about p { font-size: 16px; line-height: 1.75; color: var(--text); margin: 0 0 16px; }
+  .about a { color: var(--accent); text-decoration: none; }
+  .about a:hover { text-decoration: underline; }
+  .about ul { margin: 0; padding-left: 20px; }
+  .about li { font-size: 16px; line-height: 1.7; color: var(--text); margin: 7px 0; }
+  .about .req { border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; background: var(--panel); }
+  .about .cta { display: inline-block; margin-top: 8px; font-family: var(--mono); font-weight: 600; }
+</style>
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <nav class="mode-nav">
+      <a class="mode-tab" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
+        <span>Time Trials</span>
+      </a>
+      <a class="mode-tab" href="/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
+      </a>
+      <a class="mode-tab" href="/practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
+        <span>Practice</span>
+      </a>
+    </nav>
+    <div class="nav-account" id="navAccount"></div>
+  </header>
+
+  <main class="main">
+    <article class="about">
+      <h1>About ChordRush</h1>
+      <p class="lede">ChordRush is a free piano chord trainer for MIDI keyboards — a chord name appears and you play it against the clock, drilling triads, 7ths, and inversions until they're automatic.</p>
+
+      <h2>Why it exists</h2>
+      <p>I'm teaching myself piano and kept running into the same thing: I knew my chords fine, I just couldn't play them fast. I'd see a chord name and sit there finding it one note at a time. More theory wasn't going to fix that. I just needed to do it over and over until my hands stopped thinking about it.</p>
+      <p>I went looking for something that would just drill that on a real keyboard and didn't really find one, so I made this. A chord shows up, you play it, you get the next one. It's a side project and it's rough in spots, but it's genuinely made me faster, which is about the only reason I keep working on it.</p>
+
+      <h2>What you need to play</h2>
+      <div class="req">
+        <ul>
+          <li>A <strong>MIDI keyboard</strong> connected to your computer (USB or Bluetooth).</li>
+          <li><strong>Chrome or Edge on desktop</strong> — ChordRush reads your playing through the Web MIDI API, which Safari, Firefox, and phones don't support yet.</li>
+        </ul>
+      </div>
+      <p style="margin-top:14px;">No keyboard handy? You can still look around, but the drills need live MIDI input to score what you play.</p>
+
+      <h2>The three ways to play</h2>
+      <ul>
+        <li><a href="/">Time Trials</a> — race the clock through a set of chords; your best times land on the leaderboard.</li>
+        <li><a href="/practice">Practice</a> — a pressure-free warmup board: play each shape to light it up.</li>
+        <li><a href="/leaderboard">Leaderboard</a> — see the fastest players on each chord set. Log in and your dashboard tracks your speed per chord over time.</li>
+      </ul>
+
+      <h2>Say hi</h2>
+      <p>It's just me building this. If something's broken, or you want a chord type or mode added, the Discord and GitHub links below are the fastest way to reach me — feedback genuinely shapes what gets built next.</p>
+      <a class="cta" href="/">start playing →</a>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <a href="/about" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      about
+    </a>
+    <a href="https://discord.gg/SCjKGuJjCp" target="_blank" rel="noopener" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+      discord
+    </a>
+    <a href="https://github.com/rbroz/chordrush" target="_blank" rel="noopener" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.014 2.898-.014 3.293 0 .322.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      github
+    </a>
+  </footer>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+function renderNav(session){
+  const nav = $('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+  } else {
+    nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
+  }
+}
+(async () => {
+  const { data:{ session } } = await supabase.auth.getSession();
+  renderNav(session);
+})();
+</script>
+</body>
+</html>
