@@ -1028,13 +1028,23 @@ async function handleSignup(e){
   if(checkErr){ submit.disabled=false; return setMsg('Could not check username: '+checkErr.message, 'error'); }
   if(existing && existing.length){ submit.disabled=false; return setMsg('That username is taken', 'error'); }
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email, password, options:{ data:{ username }, emailRedirectTo: window.location.origin }
   });
   submit.disabled=false;
   if(error) return setMsg(error.message, 'error');
-  setMsg('Account created! Check '+email+' to verify, then log in.', 'ok');
   signupForm.reset();
+  if(data.session){
+    // email confirmation is OFF → signUp returns a live session; drop them straight into the app
+    setMsg('Welcome! 🎹', 'ok');
+    closeModal();
+    await renderAuth();             // sets currentSession + nav
+    await migrateLocalToAccount();  // move any guest times into the new account
+    await updateModeUI();
+  } else {
+    // confirmation is ON → they must verify their email before logging in
+    setMsg('Account created! Check '+email+' to verify, then log in.', 'ok');
+  }
 }
 
 async function handleLogin(e){
