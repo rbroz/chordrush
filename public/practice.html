@@ -19,9 +19,11 @@
   .warm-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 14px 10px; border: 1px solid var(--line); border-radius: 12px; transition: background .08s, border-color .08s; }
   .warm-card.played { border-color: var(--accent); }
   .warm-card.lit { background: var(--accent); border-color: var(--accent); }
-  .warm-card.lit .warm-name { color: #fff; }
+  .warm-card.lit .warm-name, .warm-card.lit .warm-count { color: #fff; }
   .warm-kbd svg { display: block; height: 66px; width: auto; }
   .warm-name { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--text); }
+  .warm-count { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .warm-card.played .warm-count { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -186,21 +188,38 @@ function refresh(){
 
 /* ---------- warmup board: the 12 shapes for the selected type × voicing ---------- */
 let boardChords = [];
+const playCounts = {};   // chord key → times played this session (survives set switches, resets on reload)
+let lastKey = null;      // last chord that counted — guards against mashing the same chord
+let litState = [];       // per-card previous match state, for rising-edge detection
+const chordKey = c => c.pcs.join(',') + '|' + (c.bass ?? 'any');
 function renderBoard(){
   const type = enabledTypes()[0], inv = enabledInvs()[0];
   boardChords = ROOTS.map(r => freestyle ? chordFor(r, type, 0, true) : chordFor(r, type, inv));
-  $("warmGrid").innerHTML = boardChords.map((c,i) =>
-    '<div class="warm-card" data-idx="'+i+'"><div class="warm-kbd">'+keyboardSVG(c)+'</div>'
-    + '<div class="warm-name">'+c.name+'</div></div>'
-  ).join('');
+  litState = boardChords.map(()=>false);
+  $("warmGrid").innerHTML = boardChords.map((c,i) => {
+    const n = playCounts[chordKey(c)] || 0;
+    return '<div class="warm-card'+(n?' played':'')+'" data-idx="'+i+'"><div class="warm-kbd">'+keyboardSVG(c)+'</div>'
+      + '<div class="warm-name">'+c.name+'</div>'
+      + '<div class="warm-count" data-count>'+n+'</div></div>';
+  }).join('');
 }
-// light up whichever shape you're currently holding; keep an accent border once you've hit it
+// light up the shape you're holding; count a play on each fresh grab, skipping consecutive repeats (mashing)
 function checkBoard(){
   const notes = [...held.keys()], cards = $("warmGrid").children;
   for(let i=0; i<boardChords.length; i++){
     const on = matchesChord(notes, boardChords[i]);
     cards[i].classList.toggle("lit", on);
-    if(on) cards[i].classList.add("played");
+    if(on && !litState[i]){                          // rising edge: chord just became fully voiced
+      const key = chordKey(boardChords[i]);
+      if(key !== lastKey){                            // only count non-consecutive chords
+        playCounts[key] = (playCounts[key] || 0) + 1;
+        lastKey = key;
+        cards[i].classList.add("played");
+        const cEl = cards[i].querySelector("[data-count]");
+        if(cEl) cEl.textContent = playCounts[key];
+      }
+    }
+    litState[i] = on;
   }
 }
 
