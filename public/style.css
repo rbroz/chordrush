@@ -44,6 +44,10 @@ body {
 .conn button { border:0; background:transparent; color:var(--accent); cursor:pointer; font:inherit; padding:0; }
 .dot { width:8px; height:8px; border-radius:50%; background:#d1d5db; flex:none; }
 .dot.on { background:var(--good); }
+/* compact MIDI status: a keyboard icon, dulled when no keyboard is connected, green when it is (detail in the title tooltip) */
+.kbd-ind { display:inline-flex; align-items:center; }
+.kbd-ind .kbd-icon { width:20px; height:20px; color:var(--muted); opacity:.4; transition:color .15s, opacity .15s; }
+.kbd-ind.on .kbd-icon { color:var(--good); opacity:1; }
 .err { color:var(--bad); font-size:13px; margin-top:12px; }
 
 .filterbar { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line);

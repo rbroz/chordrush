@@ -60,8 +60,9 @@
   <main class="main">
     <div class="filterbars">
       <div class="conn">
-        <span class="dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">requesting MIDI…</span>
+        <span class="kbd-ind" id="kbdInd" title="requesting MIDI…" aria-label="MIDI keyboard status">
+          <svg class="kbd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M7.75 6v12M12 6v12M16.25 6v12"/></svg>
+        </span>
       </div>
       <div class="type-combo" id="typeCombo">
         <div class="type-seg">
@@ -89,6 +90,7 @@
           <button class="filter sep active" data-inv="0">root</button>
           <button class="filter" data-inv="1">1st inv</button>
           <button class="filter" data-inv="2">2nd inv</button>
+          <button class="filter" data-inv="3" hidden>3rd inv</button>
         </div>
       </div>
     </div>
@@ -179,10 +181,10 @@ function matchesChord(notes, c){
 
 /* ---------- filter nav (same model as Time Trials): one chord type × one voicing ---------- */
 const enabled    = { major:true, minor:false, maj7:false, min7:false, dom7:false };
-const enabledInv = { 0:true, 1:false, 2:false };
+const enabledInv = { 0:true, 1:false, 2:false, 3:false };
 let freestyle = false;   // "any voicing": show root shapes, accept any inversion
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
-const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
+const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 function toggleType(type){
   if(enabled[type] && enabledTypes().length===1) return;   // already the sole pick → no-op
   for(const t in CHORD_TYPES) enabled[t]=false;            // single-select: one chord type at a time
@@ -192,7 +194,7 @@ function toggleType(type){
 function toggleInv(i){
   if(!freestyle && enabledInv[i] && enabledInvs().length===1) return;  // already the sole pick → no-op
   freestyle=false;
-  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;       // single-select: one voicing at a time
+  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false;   // single-select: one voicing at a time
   enabledInv[i]=true;
   refresh();
 }
@@ -201,7 +203,15 @@ function toggleFreestyle(){
   freestyle=true;
   refresh();
 }
+// "3rd inv" only exists for 7th chords → show it only when a 7th is picked; fall back to root on a triad
+function syncThirdInv(){
+  const has3rd = enabledTypes().some(t => CHORD_TYPES[t].ivals.length === 4);
+  const btn = document.querySelector('#invbar .filter[data-inv="3"]');
+  if(btn) btn.hidden = !has3rd;
+  if(!has3rd && enabledInv[3]){ enabledInv[0]=true; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false; }
+}
 function refresh(){
+  syncThirdInv();
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
@@ -247,7 +257,7 @@ function checkBoard(){
 
 /* ---------- MIDI ---------- */
 const held = new Map();
-function setStatus(on, t){ $("statusDot").classList.toggle("on", !!on); $("statusText").textContent = t; }
+function setStatus(on, t){ const el=$("kbdInd"); if(el){ el.classList.toggle("on", !!on); el.title = t; } }
 async function initMidi(){
   if(!navigator.requestMIDIAccess){ setStatus(false, "Web MIDI needs Chrome/Edge on desktop"); return; }
   try {
@@ -255,7 +265,7 @@ async function initMidi(){
     const pick = () => {
       const ins = [...access.inputs.values()];
       ins.forEach(i => i.onmidimessage = onMidi);
-      setStatus(ins.length > 0, ins.length ? (ins[0].name || "keyboard connected") : "no keyboard connected");
+      setStatus(ins.length > 0, ins.length ? (ins[0].name || "keyboard connected") : "no MIDI connected");
     };
     access.onstatechange = pick; pick();
   } catch(e){ console.error('MIDI', e); setStatus(false, "MIDI unavailable — reload"); }

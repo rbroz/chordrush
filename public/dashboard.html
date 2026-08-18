@@ -93,6 +93,7 @@
               <button class="filter sep active" data-inv="0">root</button>
               <button class="filter" data-inv="1">1st inv</button>
               <button class="filter" data-inv="2">2nd inv</button>
+              <button class="filter" data-inv="3" hidden>3rd inv</button>
             </div>
           </div>
         </div>
@@ -141,10 +142,10 @@ const INV_LABEL  = ['root','1st inv','2nd inv','3rd inv'];
 // Same selection model as the main page: toggle type(s) + inversion(s); the chosen
 // combination maps to a stored mode key (root-only → "major", else e.g. "major|0,1,2").
 const enabled    = { major:true, minor:false, maj7:false, min7:false, dom7:false };   // order matches Time Trials' CHORD_TYPES
-const enabledInv = { 0:true, 1:false, 2:false };
+const enabledInv = { 0:true, 1:false, 2:false, 3:false };
 let freestyle = false;   // "any voicing" mode → its own board ("major|free")
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
-const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
+const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 function modeKey(){
   const t = enabledTypes().join('+');
   if(freestyle) return t + '|free';
@@ -222,7 +223,7 @@ function toggleType(type){
 function toggleInv(i){
   if(!freestyle && enabledInv[i] && enabledInvs().length===1) return;    // already the sole pick → no-op
   freestyle=false;                                                       // leaving "any voicing"
-  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;   // single-select: one voicing at a time
+  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false;   // single-select: one voicing at a time
   enabledInv[i]=true;
   refresh();
 }
@@ -231,7 +232,15 @@ function toggleFreestyle(){
   freestyle=true;
   refresh();
 }
+// "3rd inv" only exists for 7th chords → show it only when a 7th is picked; fall back to root on a triad
+function syncThirdInv(){
+  const has3rd = enabledTypes().some(t => t === 'maj7' || t === 'min7' || t === 'dom7');
+  const btn = document.querySelector('#invToggle .filter[data-inv="3"]');
+  if(btn) btn.hidden = !has3rd;
+  if(!has3rd && enabledInv[3]){ enabledInv[0]=true; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false; }
+}
 function refresh(){
+  syncThirdInv();
   document.querySelectorAll('.filter[data-type]').forEach(b=>b.classList.toggle('active', !!enabled[b.dataset.type]));
   document.querySelectorAll('#invToggle .filter[data-inv]').forEach(b=>b.classList.toggle('active', !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$('freeBtn'); if(fb) fb.classList.toggle('active', freestyle);

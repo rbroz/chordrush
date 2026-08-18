@@ -121,8 +121,9 @@
   <main class="main">
     <div class="filterbars">
       <div class="conn">
-        <span class="dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">requesting MIDI…</span>
+        <span class="kbd-ind" id="kbdInd" title="requesting MIDI…" aria-label="MIDI keyboard status">
+          <svg class="kbd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M7.75 6v12M12 6v12M16.25 6v12"/></svg>
+        </span>
         <select id="deviceSelect" style="display:none;"><option>— no devices —</option></select>
         <button id="soundBtn" type="button"></button>
       </div>
@@ -152,6 +153,7 @@
           <button class="filter sep" data-inv="0">root</button>
           <button class="filter" data-inv="1">1st inv</button>
           <button class="filter" data-inv="2">2nd inv</button>
+          <button class="filter" data-inv="3" hidden>3rd inv</button>
         </div>
       </div>
     </div>
@@ -301,7 +303,7 @@ const CHORD_TYPES = {
   dom7:  { label:"dom7",   suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
 };
 const enabled = { major:true, minor:false };   // filter-bar pool (major/minor only)
-const enabledInv = { 0:true, 1:false, 2:false };   // default = root only → the classic leaderboard
+const enabledInv = { 0:true, 1:false, 2:false, 3:false };   // default = root only → the classic leaderboard (3rd inv only for 7ths)
 let freestyle = false;   // any-voicing mode: show chord names, accept any inversion (own board)
 
 // pitch class → note name, for slash-chord bass labels ("G/B")
@@ -319,7 +321,7 @@ function chordFor(r, type, inv=0, anyVoicing=false){
   return { name: r.name + T.sym + "/" + PC_NAME[bass], type, inv, pcs, bass };  // "G/B"
 }
 const enabledTypes = ()=>Object.keys(CHORD_TYPES).filter(t=>enabled[t]);
-const enabledInvs  = ()=>[0,1,2].filter(i=>enabledInv[i]);
+const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 // No arg  → current behavior: every root × each filter-bar-enabled type, shuffled.
 // A config → an AI-built test: {types, roots (pitch classes 0–11), count}.
 function buildOrder(config){
@@ -396,7 +398,7 @@ let currentSession=null;                // set by renderAuth(); drives DB-vs-loc
 
 /* ---------- DOM ---------- */
 const $=id=>document.getElementById(id);
-const statusDot=$("statusDot"), statusText=$("statusText"), deviceSelect=$("deviceSelect"), errBox=$("errBox");
+const kbdInd=$("kbdInd"), deviceSelect=$("deviceSelect"), errBox=$("errBox");
 const stage=$("stage"), idleMsg=$("idleMsg"), playWrap=$("playWrap"), doneWrap=$("doneWrap");
 const chordName=$("chordName"), heldLine=$("heldLine"), promptLabel=$("promptLabel");
 const hud=$("hud"), hTime=$("hTime"), hProg=$("hProg"), hBest=$("hBest"), hErr=$("hErr");
@@ -437,7 +439,7 @@ async function initMidi(){
 function refreshDevices(){
   const inputs=midiAccess?[...midiAccess.inputs.values()]:[];
   deviceSelect.innerHTML="";
-  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no keyboard connected"); currentInput=null; return; }
+  if(!inputs.length){ deviceSelect.style.display="none"; setStatus(false,"no MIDI connected"); currentInput=null; return; }
   inputs.forEach((inp,i)=>{ const o=document.createElement("option"); o.value=inp.id; o.textContent=inp.name||("Input "+i); deviceSelect.appendChild(o); });
   deviceSelect.style.display = inputs.length>1 ? "" : "none";
   const keep=currentInput&&inputs.some(i=>i.id===currentInput.id);
@@ -448,7 +450,7 @@ function selectInput(id){
   currentInput=[...midiAccess.inputs.values()].find(i=>i.id===id)||null;
   if(currentInput){ currentInput.onmidimessage=onMidi; deviceSelect.value=id; setStatus(true, currentInput.name||"MIDI input"); }
 }
-function setStatus(on,t){ statusDot.classList.toggle("on",on); statusText.textContent=t; }
+function setStatus(on,t){ kbdInd.classList.toggle("on",on); kbdInd.title=t; }
 function showErr(m){ errBox.textContent=m; errBox.style.display="block"; }
 
 function onMidi(ev){
@@ -611,9 +613,16 @@ function toggleInv(i){
   if(phase==="running") return;
   if(!freestyle && enabledInv[i] && enabledInvs().length===1) return;  // already the sole pick → no-op
   freestyle=false;                                                     // single-select: one voicing at a time
-  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false;
+  enabledInv[0]=false; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false;
   enabledInv[i]=true;
   reconfigure();
+}
+// "3rd inv" only exists for 7th chords → show it only when a 7th is picked; fall back to root on a triad
+function syncThirdInv(){
+  const has3rd = enabledTypes().some(t => CHORD_TYPES[t].ivals.length === 4);
+  const btn = document.querySelector('#invbar .filter[data-inv="3"]');
+  if(btn) btn.hidden = !has3rd;
+  if(!has3rd && enabledInv[3]){ enabledInv[0]=true; enabledInv[1]=false; enabledInv[2]=false; enabledInv[3]=false; }
 }
 function toggleFreestyle(){
   if(phase==="running") return;
@@ -641,6 +650,7 @@ function updateTestSummary(){
   el.textContent = types + ' · ' + voicing + ' · ' + countForMode(modeKey()) + ' chords';
 }
 async function updateModeUI(){
+  syncThirdInv();
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
