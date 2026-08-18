@@ -14,9 +14,9 @@
 <style>
   #heatmap { overflow-x:auto; }
   .heatmap { border-collapse:separate; border-spacing:2px; margin:8px auto 0; }
-  .heatmap th { font-weight:400; font-size:12px; color:#999; padding:2px 6px; }
+  .heatmap th { font-weight:400; font-size:11px; color:#999; padding:2px 1px; }   /* tight so "root" doesn't widen its column */
   .heatmap tbody th { text-align:right; padding-right:8px; color:#666; }
-  .heatmap td { width:34px; height:30px; border-radius:4px; background:#f1efec; }
+  .heatmap td { width:32px; height:32px; border-radius:5px; background:#f1efec; }   /* square */
   .hm-legend { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px; font-size:12px; color:#999; }
   .hm-leg-bar { width:120px; height:10px; border-radius:5px; background:linear-gradient(to right, hsl(18,85%,90%), hsl(18,85%,45%)); }
   .hm-leg-range { color:#bbb; }
