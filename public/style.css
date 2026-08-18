@@ -45,9 +45,13 @@ body {
 .dot { width:8px; height:8px; border-radius:50%; background:#d1d5db; flex:none; }
 .dot.on { background:var(--good); }
 /* compact MIDI status: a keyboard icon, dulled when no keyboard is connected, green when it is (detail in the title tooltip) */
-.kbd-ind { display:inline-flex; align-items:center; }
-.kbd-ind .kbd-icon { width:20px; height:20px; color:var(--muted); opacity:.4; transition:color .15s, opacity .15s; }
+.kbd-ind { display:inline-flex; align-items:center; position:relative; }
+.kbd-ind .kbd-icon { width:20px; height:20px; color:var(--muted); opacity:.4; transition:color .12s, opacity .12s; }
 .kbd-ind.on .kbd-icon { color:var(--good); opacity:1; }
+.kbd-ind:hover .kbd-icon { color:var(--text); opacity:1; }   /* highlight on hover */
+.kbd-tip { position:absolute; left:50%; top:calc(100% + 8px); transform:translateX(-50%); background:#2b2b2b; color:#fff;
+           font-size:12px; padding:5px 9px; border-radius:6px; white-space:nowrap; display:none; z-index:20; pointer-events:none; }
+.kbd-ind:hover .kbd-tip { display:block; }   /* instant — no native title delay */
 .err { color:var(--bad); font-size:13px; margin-top:12px; }
 
 .filterbar { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line);
