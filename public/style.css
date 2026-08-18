@@ -163,7 +163,7 @@ body {
 .user-dropdown a, .user-dropdown button { text-align:left; font-family:var(--mono); font-size:14px; color:var(--text);
                  background:transparent; border:0; border-radius:7px; padding:9px 12px; cursor:pointer; text-decoration:none; }
 .user-dropdown a:hover, .user-dropdown button:hover { background:var(--panel); }
-.user-dropdown .dd-logout { color:var(--muted); border-top:1px solid var(--line); margin-top:3px; border-radius:0; }
+.user-dropdown .dd-logout { color:var(--text); border-top:1px solid var(--line); margin-top:3px; border-radius:0; }
 
 .modal-overlay { position:fixed; inset:0; background:rgba(20,22,28,.45); display:flex;
                  align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; z-index:50; }
