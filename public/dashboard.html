@@ -329,6 +329,7 @@ function renderHeatmap(){
   const samples={};
   for(const r of allScores){
     if(!r.splits) continue;
+    if(r.mode && r.mode.endsWith('|free')) continue;   // "any voicing" runs don't target a voicing — keep them out of the per-voicing heatmap
     for(const k in r.splits){
       const ms=r.splits[k];
       if(ms==null) continue;                       // skip start-chord nulls
