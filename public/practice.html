@@ -71,6 +71,16 @@
           <div class="type-btns">
             <button class="filter active" data-type="major">majors</button>
             <button class="filter" data-type="minor">minors</button>
+            <button class="filter" data-type="dim">dim</button>
+            <button class="filter" data-type="aug">aug</button>
+          </div>
+        </div>
+        <span class="type-div" aria-hidden="true"></span>
+        <div class="type-seg">
+          <span class="fg-label">sus</span>
+          <div class="type-btns">
+            <button class="filter" data-type="sus2">sus2</button>
+            <button class="filter" data-type="sus4">sus4</button>
           </div>
         </div>
         <span class="type-div" aria-hidden="true"></span>
@@ -83,15 +93,19 @@
           </div>
         </div>
       </div>
-      <span class="combo-x" aria-hidden="true">×</span>
-      <div class="filter-group">
-        <span class="fg-label">voicing</span>
-        <div class="filterbar" id="invbar">
-          <button class="filter" id="freeBtn">any</button>
-          <button class="filter sep active" data-inv="0">root</button>
-          <button class="filter" data-inv="1">1st inv</button>
-          <button class="filter" data-inv="2">2nd inv</button>
-          <button class="filter" data-inv="3" hidden>3rd inv</button>
+      <div class="voice-filter">
+        <button class="vf-btn" id="voiceFilterBtn" type="button" title="voicing" aria-label="voicing filter" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+        </button>
+        <div class="vf-pop" id="voiceFilterPop" hidden>
+          <span class="vf-pop-label">voicing</span>
+          <div class="filterbar" id="invbar">
+            <button class="filter" id="freeBtn">any</button>
+            <button class="filter sep" data-inv="0">root</button>
+            <button class="filter" data-inv="1">1st inv</button>
+            <button class="filter" data-inv="2">2nd inv</button>
+            <button class="filter" data-inv="3" hidden>3rd inv</button>
+          </div>
         </div>
       </div>
     </div>
@@ -132,6 +146,10 @@ const ROOTS = [
 const CHORD_TYPES = {
   major: { suffix:" Major", sym:"",     ivals:[0,4,7] },
   minor: { suffix:" minor", sym:"m",    ivals:[0,3,7] },
+  dim:   { suffix:" dim",   sym:"°",    ivals:[0,3,6] },
+  aug:   { suffix:" aug",   sym:"+",    ivals:[0,4,8] },
+  sus2:  { suffix:" sus2",  sym:"sus2", ivals:[0,2,7] },
+  sus4:  { suffix:" sus4",  sym:"sus4", ivals:[0,5,7] },
   maj7:  { suffix:" maj7",  sym:"maj7", ivals:[0,4,7,11] },
   min7:  { suffix:" m7",    sym:"m7",   ivals:[0,3,7,10] },
   dom7:  { suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
@@ -181,9 +199,9 @@ function matchesChord(notes, c){
 }
 
 /* ---------- filter nav (same model as Time Trials): one chord type × one voicing ---------- */
-const enabled    = { major:true, minor:false, maj7:false, min7:false, dom7:false };
+const enabled    = { major:true, minor:false, dim:false, aug:false, sus2:false, sus4:false, maj7:false, min7:false, dom7:false };
 const enabledInv = { 0:true, 1:false, 2:false, 3:false };
-let freestyle = false;   // "any voicing": show root shapes, accept any inversion
+let freestyle = true;   // default = "any voicing": show root shapes, accept any inversion
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
 const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 function toggleType(type){
@@ -216,6 +234,7 @@ function refresh(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
+  const vb=$("voiceFilterBtn"); if(vb) vb.classList.toggle("on", !freestyle);   // icon accent when a specific voicing is filtered
   renderBoard();
 }
 
@@ -300,6 +319,13 @@ function renderNav(session){
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;
+// voicing filter popover
+const vfBtn=$("voiceFilterBtn"), vfPop=$("voiceFilterPop");
+function closeVfPop(){ vfPop.hidden = true; vfBtn.setAttribute("aria-expanded","false"); }
+vfBtn.onclick = (e)=>{ e.stopPropagation(); const open = vfPop.hidden; vfPop.hidden = !open; vfBtn.setAttribute("aria-expanded", String(open)); };
+vfPop.addEventListener("click", (e)=>{ if(e.target.closest(".filter")) closeVfPop(); });
+document.addEventListener("click", (e)=>{ if(!vfPop.hidden && !vfPop.contains(e.target) && !vfBtn.contains(e.target)) closeVfPop(); });
+document.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !vfPop.hidden) closeVfPop(); });
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();

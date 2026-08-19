@@ -134,6 +134,16 @@
           <div class="type-btns">
             <button class="filter" data-type="major">majors</button>
             <button class="filter" data-type="minor">minors</button>
+            <button class="filter" data-type="dim">dim</button>
+            <button class="filter" data-type="aug">aug</button>
+          </div>
+        </div>
+        <span class="type-div" aria-hidden="true"></span>
+        <div class="type-seg">
+          <span class="fg-label">sus</span>
+          <div class="type-btns">
+            <button class="filter" data-type="sus2">sus2</button>
+            <button class="filter" data-type="sus4">sus4</button>
           </div>
         </div>
         <span class="type-div" aria-hidden="true"></span>
@@ -146,15 +156,19 @@
           </div>
         </div>
       </div>
-      <span class="combo-x" aria-hidden="true">×</span>
-      <div class="filter-group">
-        <span class="fg-label">voicing</span>
-        <div class="filterbar" id="invbar">
-          <button class="filter" id="freeBtn">any</button>
-          <button class="filter sep" data-inv="0">root</button>
-          <button class="filter" data-inv="1">1st inv</button>
-          <button class="filter" data-inv="2">2nd inv</button>
-          <button class="filter" data-inv="3" hidden>3rd inv</button>
+      <div class="voice-filter">
+        <button class="vf-btn" id="voiceFilterBtn" type="button" title="voicing" aria-label="voicing filter" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+        </button>
+        <div class="vf-pop" id="voiceFilterPop" hidden>
+          <span class="vf-pop-label">voicing</span>
+          <div class="filterbar" id="invbar">
+            <button class="filter" id="freeBtn">any</button>
+            <button class="filter sep" data-inv="0">root</button>
+            <button class="filter" data-inv="1">1st inv</button>
+            <button class="filter" data-inv="2">2nd inv</button>
+            <button class="filter" data-inv="3" hidden>3rd inv</button>
+          </div>
         </div>
       </div>
     </div>
@@ -299,13 +313,15 @@ const CHORD_TYPES = {
   minor: { label:"minors", suffix:" minor", sym:"m",    ivals:[0,3,7] },
   dim:   { label:"dim",    suffix:" dim",   sym:"°",    ivals:[0,3,6] },
   aug:   { label:"aug",    suffix:" aug",   sym:"+",    ivals:[0,4,8] },
+  sus2:  { label:"sus2",   suffix:" sus2",  sym:"sus2", ivals:[0,2,7] },
+  sus4:  { label:"sus4",   suffix:" sus4",  sym:"sus4", ivals:[0,5,7] },
   maj7:  { label:"maj7",   suffix:" maj7",  sym:"maj7", ivals:[0,4,7,11] },
   min7:  { label:"min7",   suffix:" m7",    sym:"m7",   ivals:[0,3,7,10] },
   dom7:  { label:"dom7",   suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
 };
-const enabled = { major:true, minor:false };   // filter-bar pool (major/minor only)
+const enabled = { major:true, minor:false, dim:false, aug:false, sus2:false, sus4:false, maj7:false, min7:false, dom7:false };
 const enabledInv = { 0:true, 1:false, 2:false, 3:false };   // default = root only → the classic leaderboard (3rd inv only for 7ths)
-let freestyle = false;   // any-voicing mode: show chord names, accept any inversion (own board)
+let freestyle = true;   // default = "any voicing": show chord names, accept any inversion (own board)
 
 // pitch class → note name, for slash-chord bass labels ("G/B")
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
@@ -655,6 +671,7 @@ async function updateModeUI(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll(".filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
+  const vb=$("voiceFilterBtn"); if(vb) vb.classList.toggle("on", !freestyle);   // icon accent when a specific voicing is filtered
   updateTestSummary();
   await refreshBoard();
 }
@@ -1123,6 +1140,13 @@ $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;   // "any voicing" = freestyle (accept any inversion)
+// voicing filter popover
+const vfBtn=$("voiceFilterBtn"), vfPop=$("voiceFilterPop");
+function closeVfPop(){ vfPop.hidden = true; vfBtn.setAttribute("aria-expanded","false"); }
+vfBtn.onclick = (e)=>{ e.stopPropagation(); const open = vfPop.hidden; vfPop.hidden = !open; vfBtn.setAttribute("aria-expanded", String(open)); };
+vfPop.addEventListener("click", (e)=>{ if(e.target.closest(".filter")) closeVfPop(); });   // close after picking a voicing
+document.addEventListener("click", (e)=>{ if(!vfPop.hidden && !vfPop.contains(e.target) && !vfBtn.contains(e.target)) closeVfPop(); });
+document.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !vfPop.hidden) closeVfPop(); });
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);

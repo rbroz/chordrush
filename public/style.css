@@ -68,6 +68,16 @@ body {
 .type-div { width:1px; align-self:stretch; background:var(--line); margin:3px 3px; }
 /* × between the type pill and voicing = "type compounds with voicing" */
 .combo-x { align-self:flex-end; margin-bottom:12px; font-size:20px; color:var(--muted); user-select:none; }
+/* voicing filter: a small icon that opens a popover — keeps voicings out of the main row as chord types grow */
+.voice-filter { position:relative; display:inline-flex; align-items:flex-end; }
+.vf-btn { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border:1px solid var(--line); background:var(--panel); border-radius:10px; color:var(--muted); cursor:pointer; }
+.vf-btn:hover { border-color:var(--accent); color:var(--accent); }
+.vf-btn.on { color:var(--accent); border-color:var(--accent); }   /* a specific voicing is filtered (not "any") */
+.vf-btn svg { width:18px; height:18px; }
+.vf-pop { position:absolute; top:calc(100% + 8px); right:0; z-index:30; display:flex; flex-direction:column; align-items:center; gap:8px;
+          background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:12px; box-shadow:0 8px 26px rgba(0,0,0,.12); }
+.vf-pop[hidden] { display:none; }   /* beat the class's display:flex so the hidden attribute works */
+.vf-pop-label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
 .site-footer { max-width:620px; margin:80px auto 40px; padding:0 20px; display:flex; justify-content:center; align-items:center; gap:24px; color:var(--muted); font-size:13px; line-height:1.6; }
 .site-footer a.footer-link { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-family:var(--mono); font-size:14px; text-decoration:none; }
 .site-footer a.footer-link:hover { color:var(--accent); }
