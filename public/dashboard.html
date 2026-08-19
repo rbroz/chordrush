@@ -327,9 +327,9 @@ const HM_ROOTS = ["C","C♯","D","E♭","E","F","F♯","G","A♭","A","B♭","B"
 const HM_COLS = [
   {type:'major', inv:'root'}, {type:'major', inv:'1st'}, {type:'major', inv:'2nd'},
   {type:'minor', inv:'root'}, {type:'minor', inv:'1st'}, {type:'minor', inv:'2nd'},
-  {type:'maj7',  inv:'root'}, {type:'maj7',  inv:'1st'}, {type:'maj7',  inv:'2nd'},
-  {type:'min7',  inv:'root'}, {type:'min7',  inv:'1st'}, {type:'min7',  inv:'2nd'},
-  {type:'dom7',  inv:'root'}, {type:'dom7',  inv:'1st'}, {type:'dom7',  inv:'2nd'},
+  {type:'maj7',  inv:'root'}, {type:'maj7',  inv:'1st'}, {type:'maj7',  inv:'2nd'}, {type:'maj7', inv:'3rd'},
+  {type:'min7',  inv:'root'}, {type:'min7',  inv:'1st'}, {type:'min7',  inv:'2nd'}, {type:'min7', inv:'3rd'},
+  {type:'dom7',  inv:'root'}, {type:'dom7',  inv:'1st'}, {type:'dom7',  inv:'2nd'}, {type:'dom7', inv:'3rd'},
 ];
 function renderHeatmap(){
   const el=$('heatmap'), empty=$('hmEmpty'), legend=$('hmLegend');
@@ -358,8 +358,8 @@ function renderHeatmap(){
   const span = max>min ? max-min : 1;
 
   let html='<table class="heatmap"><thead>'
-    +'<tr><th></th><th colspan="3">majors</th><th colspan="3">minors</th><th colspan="3">maj7</th><th colspan="3">min7</th><th colspan="3">dom7</th></tr>'
-    +'<tr><th></th>'+'<th>root</th><th>1st</th><th>2nd</th>'.repeat(5)+'</tr>'
+    +'<tr><th></th><th colspan="3">majors</th><th colspan="3">minors</th><th colspan="4">maj7</th><th colspan="4">min7</th><th colspan="4">dom7</th></tr>'
+    +'<tr><th></th>'+'<th>root</th><th>1st</th><th>2nd</th>'.repeat(2)+'<th>root</th><th>1st</th><th>2nd</th><th>3rd</th>'.repeat(3)+'</tr>'
     +'</thead><tbody>';
   for(const root of HM_ROOTS){
     html+='<tr><th>'+root+'</th>';
