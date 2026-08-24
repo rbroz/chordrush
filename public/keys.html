@@ -4,35 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Voice Leading — ChordRush</title>
-<meta name="description" content="Voice-leading trainer for piano: connect a chord progression by moving your hand as little as possible. Timed, with the smoothest route revealed.">
-<link rel="canonical" href="https://chordrush.app/voice-leading">
+<title>Keys — ChordRush</title>
+<meta name="description" content="Learn the diatonic chords of every major key on piano — the 7 chords that belong to a key, with their roman-numeral roles. Play each to light it up.">
+<link rel="canonical" href="https://chordrush.app/keys">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="stylesheet" href="/style.css">
 <style>
-  .vl-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 5vh; width: 100%; }
-  .vl-hdr { text-align: center; color: var(--muted); font-size: 13px; margin: 22px 0 26px; }
-  .vl-prog { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
-  .vl-chord { font-family: var(--mono); font-weight: 700; font-size: clamp(20px, 3.2vw, 30px); color: var(--muted); transition: color .1s; }
-  .vl-chord.current { color: var(--accent); }
-  .vl-chord.done { color: var(--text); }
-  .vl-sep { color: var(--line); font-size: 22px; }
-  .vl-prompt { font-family: var(--mono); font-size: 15px; color: var(--muted); margin: 30px 0 0; min-height: 22px; }
-  .vl-results { display: flex; flex-direction: column; align-items: center; margin-top: 34px; }
-  .vl-scores { display: flex; gap: 56px; margin-bottom: 6px; }
-  .vl-score { text-align: center; }
-  .vl-val { font-family: var(--mono); font-weight: 700; font-size: 34px; color: var(--text); font-variant-numeric: tabular-nums; }
-  .vl-val .vl-sub { font-size: 14px; font-weight: 600; color: var(--muted); }
-  .vl-lab { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
-  .vl-reveal-lab { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 34px 0 14px; }
-  .vl-route { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-bottom: 30px; }
-  .vl-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 11px 14px 9px; border: 1px solid var(--line); border-radius: 12px; }
-  .vl-card .vl-kbd svg { display: block; height: 62px; width: auto; }
-  .vl-card .vl-nm { font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--text); }
-  .vl-arrow { color: var(--muted); font-size: 20px; }
   .hint-kbd { max-width: 100%; height: auto; }
   .hint-kbd text { font-family: var(--mono); font-weight: 600; }
+  .filterbars { margin-top: 3vh; }
+  .keybar { flex-wrap: wrap; }
+  .key-title { text-align: center; font-family: var(--mono); font-weight: 700; font-size: 22px; color: var(--text); margin: 3vh 0 4px; }
+  .key-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .warm-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; max-width: 1120px; margin: 0 auto 4vh; }
+  .warm-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 13px 9px; border: 1px solid var(--line); border-radius: 12px; transition: background .08s, border-color .08s; }
+  .warm-card.played { border-color: var(--accent); }
+  .warm-card.lit { background: var(--accent); border-color: var(--accent); }
+  .warm-card.lit .warm-name, .warm-card.lit .warm-rn { color: #fff; }
+  .warm-rn { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--accent); }
+  .warm-kbd svg { display: block; height: clamp(52px, 7vh, 84px); width: auto; }
+  .warm-name { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--text); }
 </style>
 </head>
 <body>
@@ -47,11 +39,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
         <span>Time Trials</span>
       </a>
-      <a class="mode-tab" href="/keys">
+      <a class="mode-tab active" href="/keys" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>
         <span>Keys</span>
       </a>
-      <a class="mode-tab active" href="/voice-leading" aria-current="page">
+      <a class="mode-tab" href="/voice-leading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18H8V13H13V8H18V3H21"/></svg>
         <span>Voice Leading</span>
       </a>
@@ -68,22 +60,22 @@
   </header>
 
   <main class="main">
-    <div class="vl-wrap">
+    <div class="filterbars">
       <div class="conn">
-        <span class="dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">requesting MIDI…</span>
+        <span class="kbd-ind" id="kbdInd" aria-label="MIDI keyboard status">
+          <svg class="kbd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M7.75 6v12M12 6v12M16.25 6v12"/></svg>
+          <span class="kbd-tip" id="kbdTip">requesting MIDI…</span>
+        </span>
       </div>
-      <div class="vl-hdr">voice-lead the progression — move your hand as little as possible</div>
-      <div class="vl-prog" id="vlProg"></div>
-
-      <div class="vl-results" id="vlResults" hidden>
-        <div class="vl-scores">
-          <div class="vl-score"><div class="vl-val" id="vlTime">—</div><div class="vl-lab">time</div></div>
-          <div class="vl-score"><div class="vl-val" id="vlDist">—</div><div class="vl-lab">distance</div></div>
-        </div>
-        <div class="vl-reveal-lab">play to start</div>
+      <div class="filter-group">
+        <span class="fg-label">key</span>
+        <div class="filterbar keybar" id="keybar"></div>
       </div>
     </div>
+
+    <div class="key-title" id="keyTitle">C major</div>
+    <div class="key-sub">the 7 chords of the key — play each to light it up</div>
+    <div id="board" class="warm-grid"></div>
   </main>
 
   <footer class="site-footer">
@@ -116,24 +108,36 @@ const ROOTS = [
   {name:"A♭",pc:8},{name:"A",pc:9},{name:"B♭",pc:10},{name:"B",pc:11},
 ];
 const CHORD_TYPES = {
-  major: { suffix:" Major", sym:"",  ivals:[0,4,7] },
-  minor: { suffix:" minor", sym:"m", ivals:[0,3,7] },
+  major: { suffix:" Major", ivals:[0,4,7] },
+  minor: { suffix:" minor", ivals:[0,3,7] },
+  dim:   { suffix:" dim",   ivals:[0,3,6] },
 };
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
-function chordFor(r, type, inv){
+// root-position chord (no bass requirement — any voicing is accepted when playing)
+function chordFor(r, type){
   const T = CHORD_TYPES[type];
-  const pcs = T.ivals.map(i => (r.pc + i) % 12);
-  if(!inv) return { name:r.name+T.suffix, type, inv:0, pcs, bass:r.pc };
-  const bass = (r.pc + T.ivals[inv]) % 12;
-  return { name:r.name+T.sym+"/"+PC_NAME[bass], type, inv, pcs, bass };
+  return { name:r.name+T.suffix, type, pcs: T.ivals.map(i => (r.pc + i) % 12) };
 }
-const shuffled = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+
+// The 7 diatonic triads of a MAJOR key: degree (semitones above tonic) + quality + roman numeral.
+// Pattern is the same in every key — that's the whole lesson.
+const DIATONIC = [
+  { deg:0,  qual:'major', rn:'I'    },
+  { deg:2,  qual:'minor', rn:'ii'   },
+  { deg:4,  qual:'minor', rn:'iii'  },
+  { deg:5,  qual:'major', rn:'IV'   },
+  { deg:7,  qual:'major', rn:'V'    },
+  { deg:9,  qual:'minor', rn:'vi'   },
+  { deg:11, qual:'dim',   rn:'vii°' },
+];
+// the 12 major keys, by tonic pitch class (chromatic order)
+const KEYS = ROOTS.map(r => r.pc);
 
 /* ---------- keyboard visual (duplicated from Time Trials) ---------- */
 const WHITE = new Set([0,2,4,5,7,9,11]), ACCENT = "#5b7cfa";
 const isW = a => WHITE.has(((a%12)+12)%12), nm = a => PC_NAME[((a%12)+12)%12];
-function keyboardSVG(chord){
-  const pcs = chord.pcs, bassPc = chord.bass!=null?chord.bass:pcs[0], bassAbs = bassPc+24;
+function keyboardSVG(pcs){
+  const bassPc = pcs[0], bassAbs = bassPc+24;
   const lit = new Set(pcs.map(pc => bassAbs + ((pc-bassPc+12)%12))), top = Math.max(...lit);
   let sA = bassAbs-2; while(!isW(sA)) sA--;
   let eA = top+2;     while(!isW(eA)) eA++;
@@ -152,112 +156,59 @@ function keyboardSVG(chord){
   }
   return s + `</svg>`;
 }
-
-/* ---------- voice-leading math ---------- */
-const PERMS = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
-// minimum total voice movement between two played triads (3 absolute notes each)
-function transDist(a, b){
-  let best = Infinity;
-  for(const p of PERMS){
-    const d = Math.abs(a[0]-b[p[0]]) + Math.abs(a[1]-b[p[1]]) + Math.abs(a[2]-b[p[2]]);
-    if(d < best) best = d;
-  }
-  return best;
-}
-// all close-position voicings of a triad: 3 inversions across a few octaves
-function voicings(ch){
-  const out = [];
-  for(let oct = 3; oct <= 5; oct++){
-    for(let inv = 0; inv < 3; inv++){
-      const base = 12*oct, rot = [];
-      for(let k=0;k<3;k++) rot.push((ch.root + ch.ivals[(inv+k)%3]) % 12);
-      const notes = [base + rot[0]];
-      for(let k=1;k<3;k++){ let n = base + rot[k]; while(n <= notes[k-1]) n += 12; notes.push(n); }
-      out.push({ notes, inv });
-    }
-  }
-  return out;
-}
-// smoothest playable route through the progression (min total movement) via DP
-function optimalRoute(prog){
-  const V = prog.map(voicings);
-  let cost = V[0].map(() => 0);
-  const back = V.map(() => []);
-  for(let i=1;i<V.length;i++){
-    const next = [];
-    for(let j=0;j<V[i].length;j++){
-      let best=Infinity, bi=0;
-      for(let k=0;k<V[i-1].length;k++){
-        const d = cost[k] + transDist(V[i-1][k].notes, V[i][j].notes);
-        if(d < best){ best=d; bi=k; }
-      }
-      next.push(best); back[i][j]=bi;
-    }
-    cost = next;
-  }
-  let best=Infinity, bj=0;
-  for(let j=0;j<cost.length;j++) if(cost[j] < best){ best=cost[j]; bj=j; }
-  const seq=[]; let j=bj;
-  for(let i=V.length-1;i>=0;i--){ seq[i]=V[i][j]; if(i>0) j=back[i][j]; }
-  return { distance: best, voicings: seq };
+// does the held set voice this chord? (right pitch classes — any voicing/inversion counts)
+function matchesPcs(notes, pcs){
+  if(notes.length !== pcs.length) return false;
+  const h = new Set(notes.map(n => ((n%12)+12)%12));
+  if(h.size !== pcs.length) return false;
+  for(const p of pcs) if(!h.has(p)) return false;
+  return true;
 }
 
-/* ---------- game ---------- */
-let progression = [], played = [], step = 0, phase = 'ready';
-let startTime = 0, endTime = 0;
-const held = new Map();
-
-function randomProgression(){
-  const roots = shuffled([...Array(12).keys()]).slice(0, 3);   // 3 distinct roots
-  const types = ['major','minor'];
-  return roots.map(pc => {
-    const type = types[Math.floor(Math.random()*2)], r = ROOTS[pc];
-    return { root: pc, type, ivals: CHORD_TYPES[type].ivals, pcs: chordFor(r, type, 0).pcs, name: r.name + CHORD_TYPES[type].suffix };
+/* ---------- the board: the 7 diatonic chords of the selected key ---------- */
+let tonic = 0;          // pitch class of the current key's tonic
+let boardChords = [], litState = [];
+function keyName(pc){ return PC_NAME[pc] + ' major'; }
+function buildKey(pc){
+  return DIATONIC.map(d => {
+    const r = ROOTS[(pc + d.deg) % 12];
+    return { ...chordFor(r, d.qual), rn: d.rn };
   });
 }
-function newRound(){
-  progression = randomProgression(); played = []; step = 0; phase = 'ready';
-  $('vlResults').hidden = true;
-  renderProg();
+function renderKeyBar(){
+  $('keybar').innerHTML = KEYS.map(pc =>
+    '<button class="filter'+(pc===tonic?' active':'')+'" data-key="'+pc+'">'+PC_NAME[pc]+'</button>'
+  ).join('');
 }
-function renderProg(){
-  $('vlProg').innerHTML = progression.map((ch,i) => {
-    const cls = 'vl-chord' + (i < step ? ' done' : '') + (i === step && phase !== 'done' ? ' current' : '');
-    return '<span class="'+cls+'">'+ch.name+'</span>';
-  }).join('<span class="vl-sep">→</span>');
+function renderBoard(){
+  boardChords = buildKey(tonic);
+  litState = boardChords.map(()=>false);
+  $('keyTitle').textContent = keyName(tonic);
+  $('board').innerHTML = boardChords.map(c =>
+    '<div class="warm-card"><div class="warm-rn">'+c.rn+'</div>'
+    + '<div class="warm-kbd">'+keyboardSVG(c.pcs)+'</div>'
+    + '<div class="warm-name">'+c.name+'</div></div>'
+  ).join('');
 }
-function checkStep(){
-  if(phase === 'done') return;
-  const notes = [...held.keys()];
-  if(notes.length !== 3) return;
-  const pcs = new Set(notes.map(n => ((n%12)+12)%12));
-  if(pcs.size !== 3) return;
-  for(const t of progression[step].pcs) if(!pcs.has(t)) return;   // must be exactly this triad (any voicing)
-  recordStep(notes.slice().sort((a,b)=>a-b));
+function selectKey(pc){
+  tonic = pc;
+  document.querySelectorAll('#keybar .filter').forEach(b=>b.classList.toggle('active', +b.dataset.key===pc));
+  renderBoard();
 }
-function recordStep(notes){
-  played[step] = notes;
-  if(step === 0){ $('vlResults').hidden = true; startTime = performance.now(); phase = 'playing'; }
-  step++;
-  if(step >= progression.length){ endTime = performance.now(); finish(); return; }
-  renderProg();
-}
-function finish(){
-  const secs = (endTime - startTime) / 1000;
-  let yours = 0;
-  for(let i=1;i<played.length;i++) yours += transDist(played[i-1], played[i]);
-  const opt = optimalRoute(progression);
-  const best = Math.min(opt.distance, yours);   // guard: never show "you beat the best"
-  $('vlTime').textContent = secs.toFixed(2) + 's';
-  $('vlDist').innerHTML = yours + ' <span class="vl-sub">semitones · best ' + best + '</span>';
-  $('vlResults').hidden = false;
-  // reset to replay the SAME progression on the next play (results stay as a reference); spacebar = a new one
-  played = []; step = 0; phase = 'ready';
-  renderProg();
+// light up whichever diatonic chord you're holding; keep an accent border once played
+function checkBoard(){
+  const notes = [...held.keys()], cards = $('board').children;
+  for(let i=0; i<boardChords.length; i++){
+    const on = matchesPcs(notes, boardChords[i].pcs);
+    cards[i].classList.toggle('lit', on);
+    if(on && !litState[i]) cards[i].classList.add('played');
+    litState[i] = on;
+  }
 }
 
 /* ---------- MIDI ---------- */
-function setStatus(on, t){ $('statusDot').classList.toggle('on', !!on); $('statusText').textContent = t; }
+const held = new Map();
+function setStatus(on, t){ const el=$("kbdInd"); if(el) el.classList.toggle("on", !!on); const tip=$("kbdTip"); if(tip) tip.textContent = t; }
 async function initMidi(){
   if(!navigator.requestMIDIAccess){ setStatus(false, "Web MIDI needs Chrome/Edge on desktop"); return; }
   try {
@@ -265,7 +216,7 @@ async function initMidi(){
     const pick = () => {
       const ins = [...access.inputs.values()];
       ins.forEach(i => i.onmidimessage = onMidi);
-      setStatus(ins.length > 0, ins.length ? (ins[0].name || "keyboard connected") : "no keyboard connected");
+      setStatus(ins.length > 0, ins.length ? (ins[0].name || "keyboard connected") : "no MIDI connected");
     };
     access.onstatechange = pick; pick();
   } catch(e){ console.error('MIDI', e); setStatus(false, "MIDI unavailable — reload"); }
@@ -274,7 +225,7 @@ function onMidi(ev){
   const [st,d1,d2] = ev.data, cmd = st & 0xF0;
   if(cmd===0x90 && d2>0) held.set(d1,d2);
   else if(cmd===0x80 || (cmd===0x90 && d2===0)) held.delete(d1);
-  checkStep();
+  checkBoard();
 }
 
 /* ---------- account nav ---------- */
@@ -296,14 +247,16 @@ function renderNav(session){
 }
 
 /* ---------- wiring ---------- */
-document.addEventListener('keydown', e => {
-  if(e.code === 'Space'){ e.preventDefault(); newRound(); }   // spacebar = new progression, anytime
+$('keybar').addEventListener('click', e => {
+  const b = e.target.closest('.filter[data-key]'); if(!b) return;
+  selectKey(+b.dataset.key);
 });
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
   renderNav(session);
-  newRound();
+  renderKeyBar();
+  renderBoard();
   initMidi();
 })();
 </script>
