@@ -117,9 +117,9 @@ function labelForMode(m){
   return types + ' · ' + ip.split(',').map(i => INV_LABEL[+i] || i).join('/');
 }
 
-// one call returns every populated board's top 5; render a card per mode that has plays
+// one call returns every populated board (all players, best time each); render a card per mode that has plays
 async function loadAll(){
-  const { data, error } = await supabase.rpc('get_all_boards', { p_limit: 5 });
+  const { data, error } = await supabase.rpc('get_all_boards', { p_limit: 1000 });   // effectively all
   const rows = error ? [] : (data || []);
   const byMode = new Map();
   for(const r of rows){
