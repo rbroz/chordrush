@@ -97,19 +97,15 @@
           </div>
         </div>
       </div>
-      <div class="voice-filter">
-        <button class="vf-btn" id="voiceFilterBtn" type="button" title="voicing" aria-label="voicing filter" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-        </button>
-        <div class="vf-pop" id="voiceFilterPop" hidden>
-          <span class="vf-pop-label">voicing</span>
-          <div class="filterbar" id="invbar">
-            <button class="filter" id="freeBtn">any</button>
-            <button class="filter sep" data-inv="0">root</button>
-            <button class="filter" data-inv="1">1st inv</button>
-            <button class="filter" data-inv="2">2nd inv</button>
-            <button class="filter" data-inv="3" hidden>3rd inv</button>
-          </div>
+      <span class="combo-x" aria-hidden="true">×</span>
+      <div class="filter-group">
+        <span class="fg-label">voicing</span>
+        <div class="filterbar" id="invbar">
+          <button class="filter" id="freeBtn">any</button>
+          <button class="filter sep" data-inv="0">root</button>
+          <button class="filter" data-inv="1">1st inv</button>
+          <button class="filter" data-inv="2">2nd inv</button>
+          <button class="filter" data-inv="3" hidden>3rd inv</button>
         </div>
       </div>
     </div>
@@ -238,7 +234,6 @@ function refresh(){
   document.querySelectorAll(".filter[data-type]").forEach(b=>b.classList.toggle("active", !!enabled[b.dataset.type]));
   document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.classList.toggle("active", !freestyle && !!enabledInv[b.dataset.inv]));
   const fb=$("freeBtn"); if(fb) fb.classList.toggle("active", freestyle);
-  const vb=$("voiceFilterBtn"); if(vb) vb.classList.toggle("on", !freestyle);   // icon accent when a specific voicing is filtered
   renderBoard();
 }
 
@@ -324,12 +319,6 @@ document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleT
 document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;
 // voicing filter popover
-const vfBtn=$("voiceFilterBtn"), vfPop=$("voiceFilterPop");
-function closeVfPop(){ vfPop.hidden = true; vfBtn.setAttribute("aria-expanded","false"); }
-vfBtn.onclick = (e)=>{ e.stopPropagation(); const open = vfPop.hidden; vfPop.hidden = !open; vfBtn.setAttribute("aria-expanded", String(open)); };
-vfPop.addEventListener("click", (e)=>{ if(e.target.closest(".filter")) closeVfPop(); });
-document.addEventListener("click", (e)=>{ if(!vfPop.hidden && !vfPop.contains(e.target) && !vfBtn.contains(e.target)) closeVfPop(); });
-document.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !vfPop.hidden) closeVfPop(); });
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
