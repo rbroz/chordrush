@@ -15,6 +15,7 @@
   .hint-kbd { max-width: 100%; height: auto; }
   .hint-kbd text { font-family: var(--mono); font-weight: 600; }
   /* Practice-only: pack it so the whole board fits without scrolling */
+  .mode-row { margin-top: 2.2vh; }   /* match the mode-switch height on the Test page */
   .filterbars { margin-top: 3vh; }
   .board-hdr { text-align: center; color: var(--muted); font-size: 13px; margin: 2vh 0 16px; }
   .warm-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; max-width: 1040px; margin: 0 auto 3vh; }
@@ -29,7 +30,10 @@
   .warm-count { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .warm-card.played .warm-count { color: var(--accent); }
   .site-footer { margin: 22px auto 20px; }
-  .wip-msg { text-align: center; color: var(--muted); font-size: 15px; padding: 16vh 0; letter-spacing: .02em; }
+  .reshuffle-btn { display: block; margin: 4px auto 0; font-family: var(--mono); font-size: 13px; color: var(--muted);
+                   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 16px; cursor: pointer; }
+  .reshuffle-btn:hover { color: var(--text); border-color: var(--muted); }
+  .reshuffle-btn .rs-key { color: var(--muted); opacity: .7; }
 </style>
 </head>
 <body>
@@ -131,7 +135,7 @@
 
     <div class="board-hdr" id="boardHdr">warmup — play each shape to light it up</div>
     <div id="warmGrid" class="warm-grid"></div>
-    <div id="wipMsg" class="wip-msg" hidden>voice leading warmup — work in progress</div>
+    <button id="reshuffleBtn" class="reshuffle-btn" type="button" hidden>↻ reshuffle · <span class="rs-key">space</span></button>
   </main>
 
   <footer class="site-footer">
@@ -218,6 +222,74 @@ function matchesChord(notes, c){
   return true;
 }
 
+/* ---------- voice-leading route solver (ported from the Voice Leading page) ---------- */
+const shuffled = arr => { const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const PERMS = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+// minimum total voice movement between two voiced triads (3 absolute notes each)
+function transDist(a, b){
+  let best = Infinity;
+  for(const p of PERMS){
+    const d = Math.abs(a[0]-b[p[0]]) + Math.abs(a[1]-b[p[1]]) + Math.abs(a[2]-b[p[2]]);
+    if(d < best) best = d;
+  }
+  return best;
+}
+// all close-position voicings of a triad: 3 inversions across a few octaves
+function voicings(ch){
+  const out = [];
+  for(let oct = 3; oct <= 5; oct++){
+    for(let inv = 0; inv < 3; inv++){
+      const base = 12*oct, rot = [];
+      for(let k=0;k<3;k++) rot.push((ch.root + ch.ivals[(inv+k)%3]) % 12);
+      const notes = [base + rot[0]];
+      for(let k=1;k<3;k++){ let n = base + rot[k]; while(n <= notes[k-1]) n += 12; notes.push(n); }
+      out.push({ notes, inv });
+    }
+  }
+  return out;
+}
+// smoothest playable route through the (fixed-order) chords via DP — free start
+function optimalRoute(prog){
+  const V = prog.map(voicings);
+  let cost = V[0].map(() => 0);
+  const back = V.map(() => []);
+  for(let i=1;i<V.length;i++){
+    const next = [];
+    for(let j=0;j<V[i].length;j++){
+      let best=Infinity, bi=0;
+      for(let k=0;k<V[i-1].length;k++){
+        const d = cost[k] + transDist(V[i-1][k].notes, V[i][j].notes);
+        if(d < best){ best=d; bi=k; }
+      }
+      next.push(best); back[i][j]=bi;
+    }
+    cost = next;
+  }
+  let best=Infinity, bj=0;
+  for(let j=0;j<cost.length;j++) if(cost[j] < best){ best=cost[j]; bj=j; }
+  const seq=[]; let j=bj;
+  for(let i=V.length-1;i>=0;i--){ seq[i]=V[i][j]; if(i>0) j=back[i][j]; }
+  return { distance: best, voicings: seq };
+}
+// a piano slice over a FIXED absolute range [lo,hi], lighting the given absolute notes —
+// so every route card shares one window and you SEE the voices barely move.
+function routeKbd(notes, lo, hi){
+  const lit = new Set(notes);
+  const W=20,H=76,BW=12,BH=48, whites=[];
+  for(let a=lo;a<=hi;a++) if(isW(a)) whites.push(a);
+  const width = whites.length*W, wI={}; whites.forEach((a,i)=>wI[a]=i);
+  let s = `<svg class="hint-kbd" viewBox="0 0 ${width} ${H}" width="${width}" height="${H}">`;
+  whites.forEach((a,i)=>{ const on=lit.has(a);
+    s += `<rect x="${i*W}" y="0" width="${W-1}" height="${H}" rx="3" fill="${on?ACCENT:'#ffffff'}" stroke="#dcdce3"/>`;
+    if(on) s += `<text x="${i*W+W/2}" y="${H-7}" text-anchor="middle" font-size="8" fill="#ffffff">${nm(a)}</text>`;
+  });
+  for(let a=lo;a<=hi;a++){ if(isW(a)) continue;
+    const x=(wI[a-1]+1)*W-BW/2, on=lit.has(a);
+    s += `<rect x="${x}" y="0" width="${BW}" height="${BH}" rx="2" fill="${on?ACCENT:'#2a2a30'}"/>`;
+  }
+  return s + `</svg>`;
+}
+
 /* ---------- filter nav (same model as Time Trials): one chord type × one voicing ---------- */
 const enabled    = { major:true, minor:false, dim:false, aug:false, sus2:false, sus4:false, maj7:false, min7:false, dom7:false };
 const enabledInv = { 0:true, 1:false, 2:false, 3:false };
@@ -274,6 +346,30 @@ let lastKey = null;      // last chord that counted — guards against mashing t
 let litState = [];       // per-card previous match state, for rising-edge detection
 const chordKey = c => c.pcs.join(',') + '|' + (c.bass ?? 'any');
 function renderBoard(){
+  if(pracMode === 'voice'){
+    // the key's 7 diatonic triads, shuffled, then the smoothest voice-led route through them
+    const order = shuffled(DIATONIC).map(d => ({
+      root: (diatonicKey + d.deg) % 12, ivals: CHORD_TYPES[d.qual].ivals, qual: d.qual, rn: d.rn,
+    }));
+    const route = optimalRoute(order);
+    const all = route.voicings.flatMap(v => v.notes);
+    let lo = Math.min(...all) - 2; while(!isW(lo)) lo--;
+    let hi = Math.max(...all) + 2; while(!isW(hi)) hi++;
+    boardChords = order.map((o,i) => {
+      const notes = route.voicings[i].notes, r = ROOTS.find(x => x.pc === o.root);
+      return { name: r.name + CHORD_TYPES[o.qual].suffix, type: o.qual,
+               pcs: notes.map(n => n%12), bass: notes[0]%12, rn: o.rn, voiced: notes };
+    });
+    $("boardHdr").textContent = 'the smoothest route through a random sequence of ' + keyName(diatonicKey) + ' — reshuffle below';
+    litState = boardChords.map(()=>false);
+    $("warmGrid").innerHTML = boardChords.map((c,i) =>
+      '<div class="warm-card" data-idx="'+i+'">'
+      + '<div class="warm-rn">'+c.rn+'</div>'
+      + '<div class="warm-kbd">'+routeKbd(c.voiced, lo, hi)+'</div>'
+      + '<div class="warm-name">'+c.name+'</div></div>'
+    ).join('');
+    return;
+  }
   if(pracMode === 'diatonic'){
     boardChords = DIATONIC.map(d => {
       const r = ROOTS.find(x => x.pc === (diatonicKey + d.deg) % 12);
@@ -364,28 +460,29 @@ document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleT
 document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;
 
-// WARMUP-MODE switch — all three in-page; voice-leading warmup is a placeholder for now
+// WARMUP-MODE switch — all three in-page. diatonic & voice both use the key picker.
 function setPracMode(m){
   pracMode = m;
   document.querySelectorAll('#modebar .mode-opt').forEach(x=>x.classList.toggle('active', x.dataset.mode===m));
-  const voice = m === 'voice', dia = m === 'diatonic';
-  document.querySelector('.filterbars').style.display = voice ? 'none' : '';
-  $('boardHdr').style.display = voice ? 'none' : '';
-  $('warmGrid').style.display = voice ? 'none' : '';
-  $('wipMsg').hidden = !voice;
-  if(voice) return;
-  $('typeCombo').style.display = dia ? 'none' : '';
-  document.querySelector('.combo-x').style.display = dia ? 'none' : '';
-  $('invGroup').style.display = dia ? 'none' : '';
-  $('keyPicker').style.display = dia ? '' : 'none';
+  const keyed = m === 'diatonic' || m === 'voice';   // these use the key picker, not type/voicing
+  $('typeCombo').style.display = keyed ? 'none' : '';
+  document.querySelector('.combo-x').style.display = keyed ? 'none' : '';
+  $('invGroup').style.display = keyed ? 'none' : '';
+  $('keyPicker').style.display = keyed ? '' : 'none';
+  $('reshuffleBtn').hidden = m !== 'voice';
   renderBoard();
 }
 document.querySelectorAll('#modebar .mode-opt').forEach(b=>b.onclick=()=>setPracMode(b.dataset.mode));
-// Diatonic key picker (single-select)
+// key picker — used by diatonic AND voice-leading modes (single-select)
 document.querySelectorAll('#keybar .filter[data-key]').forEach(b=>b.onclick=()=>{
   diatonicKey = +b.dataset.key;
   document.querySelectorAll('#keybar .filter[data-key]').forEach(x=>x.classList.toggle('active', x===b));
   renderBoard();
+});
+// voice-leading: reshuffle the order (button + spacebar) for a fresh route
+$('reshuffleBtn').onclick = () => renderBoard();
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space' && pracMode === 'voice'){ e.preventDefault(); renderBoard(); }
 });
 
 (async () => {
