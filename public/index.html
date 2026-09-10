@@ -71,6 +71,9 @@
   .done-tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .done-tab:hover { color: var(--text); }
   .done-panel[hidden] { display: none; }
+  /* raise the mode switch up toward the nav; keep the chord options where they are (Test page) */
+  .mode-row { margin-top: 2.2vh; }
+  .filterbars { margin-top: 7vh; }
   /* compact the done screen so results + chart fit without scrolling */
   #stage { margin-top: 1.5vh; }
   #doneWrap .prompt-label { margin-top: 10px; }
@@ -1205,6 +1208,7 @@ function setTestMode(m){
   document.querySelector('.combo-x').style.display = dia ? 'none' : '';
   $('invGroup').style.display = dia ? 'none' : '';
   $('keyPicker').style.display = dia ? '' : 'none';
+  history.replaceState(null, '', dia ? '/?test=diatonic' : '/');   // keep the URL honest to the active mode (no stale param)
   start();   // fresh run in the newly selected test
 }
 document.querySelectorAll('#modebar .mode-opt').forEach(b=>b.onclick=()=>setTestMode(b.dataset.mode));
