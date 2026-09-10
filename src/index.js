@@ -19,6 +19,12 @@ export default {
       });
     }
 
+    // /diatonic is the Test page in diatonic mode — serve index.html (the client reads
+    // the path to open in diatonic), so the clean URL works on direct load / share / reload.
+    if (url.pathname === "/diatonic") {
+      return env.ASSETS.fetch(new Request(new URL("/", url), request));
+    }
+
     // everything else → the static site (index.html, style.css, etc.)
     return env.ASSETS.fetch(request);
   },

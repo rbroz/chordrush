@@ -1208,7 +1208,7 @@ function setTestMode(m){
   document.querySelector('.combo-x').style.display = dia ? 'none' : '';
   $('invGroup').style.display = dia ? 'none' : '';
   $('keyPicker').style.display = dia ? '' : 'none';
-  history.replaceState(null, '', dia ? '/?test=diatonic' : '/');   // keep the URL honest to the active mode (no stale param)
+  history.replaceState(null, '', dia ? '/diatonic' : '/');   // clean per-mode URL (served by the Worker)
   start();   // fresh run in the newly selected test
 }
 document.querySelectorAll('#modebar .mode-opt').forEach(b=>b.onclick=()=>setTestMode(b.dataset.mode));
@@ -1284,8 +1284,8 @@ loginForm.addEventListener('submit', handleLogin);
 
 /* ---------- Init ---------- */
 migrateLegacy();
-// deep-link: /?test=diatonic opens straight into the diatonic test (e.g. from the voice-leading selector)
-const _initDiatonic = new URLSearchParams(location.search).get('test') === 'diatonic';
+// deep-link: /diatonic (or legacy /?test=diatonic) opens straight into the diatonic test
+const _initDiatonic = location.pathname === '/diatonic' || new URLSearchParams(location.search).get('test') === 'diatonic';
 renderAuth().then(() => { if(_initDiatonic) setTestMode('diatonic'); else showStage(); });
 syncStartBtn();
 updateSoundBtn();
