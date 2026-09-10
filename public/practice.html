@@ -23,10 +23,13 @@
   .warm-card.lit { background: var(--accent); border-color: var(--accent); }
   .warm-card.lit .warm-name, .warm-card.lit .warm-count { color: #fff; }
   .warm-kbd svg { display: block; height: clamp(56px, 8vh, 96px); width: auto; }   /* scales with viewport height */
+  .warm-rn { font-family: var(--mono); font-weight: 700; font-size: 15px; letter-spacing: .02em; color: var(--accent); }
+  .warm-card.lit .warm-rn { color: #fff; }
   .warm-name { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--text); }
   .warm-count { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .warm-card.played .warm-count { color: var(--accent); }
   .site-footer { margin: 22px auto 20px; }
+  .wip-msg { text-align: center; color: var(--muted); font-size: 15px; padding: 16vh 0; letter-spacing: .02em; }
 </style>
 </head>
 <body>
@@ -39,29 +42,28 @@
     <nav class="mode-nav">
       <a class="mode-tab" href="/">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
-        <span>Time Trials</span>
-      </a>
-      <a class="mode-tab" href="/keys">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>
-        <span>Keys</span>
-      </a>
-      <a class="mode-tab" href="/voice-leading">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18H8V13H13V8H18V3H21"/></svg>
-        <span>Voice Leading</span>
-      </a>
-      <a class="mode-tab" href="/leaderboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
-        <span>Leaderboard</span>
+        <span>Test</span>
       </a>
       <a class="mode-tab active" href="/practice" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
         <span>Practice</span>
+      </a>
+      <a class="mode-tab" href="/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
       </a>
     </nav>
     <div class="nav-account" id="navAccount"></div>
   </header>
 
   <main class="main">
+    <div class="mode-row">
+      <div class="mode-switch" id="modebar">
+        <button class="mode-opt active" data-mode="chords">chords</button>
+        <button class="mode-opt" data-mode="diatonic">diatonic</button>
+        <button class="mode-opt" data-mode="voice">voice leading</button>
+      </div>
+    </div>
     <div class="filterbars">
       <div class="conn">
         <span class="kbd-ind" id="kbdInd" aria-label="MIDI keyboard status">
@@ -97,8 +99,25 @@
           </div>
         </div>
       </div>
+      <div class="filter-group" id="keyPicker" style="display:none;">
+        <span class="fg-label">key</span>
+        <div class="filterbar" id="keybar">
+          <button class="filter active" data-key="0">C</button>
+          <button class="filter" data-key="1">C♯</button>
+          <button class="filter" data-key="2">D</button>
+          <button class="filter" data-key="3">E♭</button>
+          <button class="filter" data-key="4">E</button>
+          <button class="filter" data-key="5">F</button>
+          <button class="filter" data-key="6">F♯</button>
+          <button class="filter" data-key="7">G</button>
+          <button class="filter" data-key="8">A♭</button>
+          <button class="filter" data-key="9">A</button>
+          <button class="filter" data-key="10">B♭</button>
+          <button class="filter" data-key="11">B</button>
+        </div>
+      </div>
       <span class="combo-x" aria-hidden="true">×</span>
-      <div class="filter-group">
+      <div class="filter-group" id="invGroup">
         <span class="fg-label">voicing</span>
         <div class="filterbar" id="invbar">
           <button class="filter" id="freeBtn">any</button>
@@ -110,8 +129,9 @@
       </div>
     </div>
 
-    <div class="board-hdr">warmup — play each shape to light it up</div>
+    <div class="board-hdr" id="boardHdr">warmup — play each shape to light it up</div>
     <div id="warmGrid" class="warm-grid"></div>
+    <div id="wipMsg" class="wip-msg" hidden>voice leading warmup — work in progress</div>
   </main>
 
   <footer class="site-footer">
@@ -202,6 +222,16 @@ function matchesChord(notes, c){
 const enabled    = { major:true, minor:false, dim:false, aug:false, sus2:false, sus4:false, maj7:false, min7:false, dom7:false };
 const enabledInv = { 0:true, 1:false, 2:false, 3:false };
 let freestyle = true;   // default = "any voicing": show root shapes, accept any inversion
+
+/* ---------- warmup mode: 'chords' (type × voicing) | 'diatonic' (a key's diatonic triads) ---------- */
+let pracMode = 'chords';
+let diatonicKey = 0;   // pitch class of the chosen key (default C)
+const DIATONIC = [
+  {deg:0,qual:'major',rn:'I'},   {deg:2,qual:'minor',rn:'ii'}, {deg:4,qual:'minor',rn:'iii'},
+  {deg:5,qual:'major',rn:'IV'},  {deg:7,qual:'major',rn:'V'},  {deg:9,qual:'minor',rn:'vi'},
+  {deg:11,qual:'dim',rn:'vii°'},
+];
+const keyName = pc => ROOTS.find(r => r.pc === ((pc%12)+12)%12).name;
 const enabledTypes = ()=>Object.keys(enabled).filter(t=>enabled[t]);
 const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 function toggleType(type){
@@ -244,12 +274,27 @@ let lastKey = null;      // last chord that counted — guards against mashing t
 let litState = [];       // per-card previous match state, for rising-edge detection
 const chordKey = c => c.pcs.join(',') + '|' + (c.bass ?? 'any');
 function renderBoard(){
-  const type = enabledTypes()[0], inv = enabledInvs()[0];
-  boardChords = ROOTS.map(r => freestyle ? chordFor(r, type, 0, true) : chordFor(r, type, inv));
+  if(pracMode === 'diatonic'){
+    boardChords = DIATONIC.map(d => {
+      const r = ROOTS.find(x => x.pc === (diatonicKey + d.deg) % 12);
+      const c = chordFor(r, d.qual, 0, true);   // any voicing
+      c.rn = d.rn;
+      return c;
+    });
+  } else {
+    const type = enabledTypes()[0], inv = enabledInvs()[0];
+    boardChords = ROOTS.map(r => freestyle ? chordFor(r, type, 0, true) : chordFor(r, type, inv));
+  }
+  const hdr = $("boardHdr");
+  if(hdr) hdr.textContent = pracMode === 'diatonic'
+    ? 'warmup — the diatonic chords of ' + keyName(diatonicKey) + ' · play each to light it up'
+    : 'warmup — play each shape to light it up';
   litState = boardChords.map(()=>false);
   $("warmGrid").innerHTML = boardChords.map((c,i) => {
     const n = playCounts[chordKey(c)] || 0;
-    return '<div class="warm-card'+(n?' played':'')+'" data-idx="'+i+'"><div class="warm-kbd">'+keyboardSVG(c)+'</div>'
+    return '<div class="warm-card'+(n?' played':'')+'" data-idx="'+i+'">'
+      + (c.rn ? '<div class="warm-rn">'+c.rn+'</div>' : '')
+      + '<div class="warm-kbd">'+keyboardSVG(c)+'</div>'
       + '<div class="warm-name">'+c.name+'</div>'
       + '<div class="warm-count" data-count>'+n+'</div></div>';
   }).join('');
@@ -318,7 +363,30 @@ function renderNav(session){
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll("#invbar .filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;
-// voicing filter popover
+
+// WARMUP-MODE switch — all three in-page; voice-leading warmup is a placeholder for now
+function setPracMode(m){
+  pracMode = m;
+  document.querySelectorAll('#modebar .mode-opt').forEach(x=>x.classList.toggle('active', x.dataset.mode===m));
+  const voice = m === 'voice', dia = m === 'diatonic';
+  document.querySelector('.filterbars').style.display = voice ? 'none' : '';
+  $('boardHdr').style.display = voice ? 'none' : '';
+  $('warmGrid').style.display = voice ? 'none' : '';
+  $('wipMsg').hidden = !voice;
+  if(voice) return;
+  $('typeCombo').style.display = dia ? 'none' : '';
+  document.querySelector('.combo-x').style.display = dia ? 'none' : '';
+  $('invGroup').style.display = dia ? 'none' : '';
+  $('keyPicker').style.display = dia ? '' : 'none';
+  renderBoard();
+}
+document.querySelectorAll('#modebar .mode-opt').forEach(b=>b.onclick=()=>setPracMode(b.dataset.mode));
+// Diatonic key picker (single-select)
+document.querySelectorAll('#keybar .filter[data-key]').forEach(b=>b.onclick=()=>{
+  diatonicKey = +b.dataset.key;
+  document.querySelectorAll('#keybar .filter[data-key]').forEach(x=>x.classList.toggle('active', x===b));
+  renderBoard();
+});
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();

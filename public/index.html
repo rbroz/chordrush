@@ -100,29 +100,28 @@
     <nav class="mode-nav">
       <a class="mode-tab active" href="/" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
-        <span>Time Trials</span>
-      </a>
-      <a class="mode-tab" href="/keys">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>
-        <span>Keys</span>
-      </a>
-      <a class="mode-tab" href="/voice-leading">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18H8V13H13V8H18V3H21"/></svg>
-        <span>Voice Leading</span>
-      </a>
-      <a class="mode-tab" href="/leaderboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
-        <span>Leaderboard</span>
+        <span>Test</span>
       </a>
       <a class="mode-tab" href="/practice">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
         <span>Practice</span>
+      </a>
+      <a class="mode-tab" href="/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
       </a>
     </nav>
     <div class="nav-account" id="navAccount"></div>
   </header>
 
   <main class="main">
+    <div class="mode-row">
+      <div class="mode-switch" id="modebar">
+        <button class="mode-opt active" data-mode="chords">chords</button>
+        <button class="mode-opt" data-mode="diatonic">diatonic</button>
+        <button class="mode-opt" data-mode="voice">voice leading</button>
+      </div>
+    </div>
     <div class="filterbars">
       <div class="conn">
         <span class="kbd-ind" id="kbdInd" aria-label="MIDI keyboard status">
@@ -160,8 +159,25 @@
           </div>
         </div>
       </div>
+      <div class="filter-group" id="keyPicker" style="display:none;">
+        <span class="fg-label">key</span>
+        <div class="filterbar" id="keybar">
+          <button class="filter active" data-key="0">C</button>
+          <button class="filter" data-key="1">C♯</button>
+          <button class="filter" data-key="2">D</button>
+          <button class="filter" data-key="3">E♭</button>
+          <button class="filter" data-key="4">E</button>
+          <button class="filter" data-key="5">F</button>
+          <button class="filter" data-key="6">F♯</button>
+          <button class="filter" data-key="7">G</button>
+          <button class="filter" data-key="8">A♭</button>
+          <button class="filter" data-key="9">A</button>
+          <button class="filter" data-key="10">B♭</button>
+          <button class="filter" data-key="11">B</button>
+        </div>
+      </div>
       <span class="combo-x" aria-hidden="true">×</span>
-      <div class="filter-group">
+      <div class="filter-group" id="invGroup">
         <span class="fg-label">voicing</span>
         <div class="filterbar" id="invbar">
           <button class="filter" id="freeBtn">any</button>
@@ -181,6 +197,7 @@
           <div class="idle-msg" id="idleMsg">press <strong>start</strong> or spacebar</div>
 
           <div id="playWrap" style="display:none;">
+            <div class="key-ctx" id="keyCtx" style="display:none;"></div>
             <div class="chord-row">
               <div class="chord-name" id="chordName">—</div>
               <div class="chord-hint" id="chordHint" style="display:none;"></div>
@@ -326,6 +343,27 @@ let freestyle = true;   // default = "any voicing": show chord names, accept any
 // pitch class → note name, for slash-chord bass labels ("G/B")
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
 const INV_LABEL = ["root", "1st inv", "2nd inv", "3rd inv"];   // used by the board's mode label
+
+/* ---------- Test mode: 'chords' (recognition) | 'diatonic' (roman numeral in a key) ---------- */
+let testMode = 'chords';
+let diatonicKey = 0;   // pitch class of the chosen key (default C)
+// Diatonic triads of a major key: scale degree (semitones above tonic) + quality + roman numeral
+const DIATONIC = [
+  {deg:0,qual:'major',rn:'I'},   {deg:2,qual:'minor',rn:'ii'}, {deg:4,qual:'minor',rn:'iii'},
+  {deg:5,qual:'major',rn:'IV'},  {deg:7,qual:'major',rn:'V'},  {deg:9,qual:'minor',rn:'vi'},
+  {deg:11,qual:'dim',rn:'vii°'},
+];
+const keyName = pc => ROOTS.find(r => r.pc === ((pc%12)+12)%12).name;
+// The 7 diatonic triads of the chosen key, any voicing, each tagged with its roman numeral.
+function buildDiatonic(){
+  const kn = keyName(diatonicKey);
+  return shuffled(DIATONIC.map(d => {
+    const r = ROOTS.find(x => x.pc === (diatonicKey + d.deg) % 12);
+    const c = chordFor(r, d.qual, 0, true);   // any voicing (no bass requirement)
+    c.rn = d.rn; c.keyName = kn;
+    return c;
+  }));
+}
 // inv = which chord tone is in the bass: 0 root, 1 first inv (3rd), 2 second inv (5th), 3 (7ths).
 // anyVoicing = accept any bass (used by AI-built config tests, not the filter bar).
 function chordFor(r, type, inv=0, anyVoicing=false){
@@ -342,6 +380,7 @@ const enabledInvs  = ()=>[0,1,2,3].filter(i=>enabledInv[i]);
 // No arg  → current behavior: every root × each filter-bar-enabled type, shuffled.
 // A config → an AI-built test: {types, roots (pitch classes 0–11), count}.
 function buildOrder(config){
+  if(testMode === 'diatonic' && !config) return buildDiatonic();
   if(config){
     const roots = config.roots
       .map(pc => ROOTS.find(r => r.pc === pc))
@@ -386,6 +425,7 @@ function shuffled(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ cons
 // ROOT-ONLY keeps the legacy key ("major" etc.) so the original leaderboard carries over.
 // Any other voicing set gets its own board (e.g. "major|0,1,2").
 function modeKey(){
+  if(testMode === 'diatonic') return 'diatonic|' + keyName(diatonicKey);
   const t = enabledTypes().join("+");
   if(freestyle) return t + "|free";                   // any-voicing → its own board
   const invs = enabledInvs();
@@ -393,6 +433,7 @@ function modeKey(){
   return t + "|" + invs.join(",");                    // any other voicing set → its own board
 }
 function modeLabel(){
+  if(testMode === 'diatonic') return 'diatonic · key of ' + keyName(diatonicKey);
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(" + ");
   if(freestyle) return types + " · any voicing";
   const invs = enabledInvs();
@@ -661,6 +702,7 @@ function reconfigure(){
 // Leaderboard-style summary of the selected test, shown under the filter bar.
 function updateTestSummary(){
   const el=$('testSummary'); if(!el) return;
+  if(testMode === 'diatonic'){ el.textContent = 'diatonic · key of ' + keyName(diatonicKey) + ' · 7 chords'; return; }
   const types = enabledTypes().map(t=>CHORD_TYPES[t].label).join(' + ');
   const invs = enabledInvs();
   const voicing = freestyle ? 'any voicing' : ((invs.length===1 && invs[0]===0) ? 'root' : invs.map(i=>INV_LABEL[i]).join('/'));
@@ -714,7 +756,19 @@ function start(){
   showChord();
   syncStartBtn();
 }
-function showChord(){ const c=order[idx]; chordName.innerHTML = c.name + (c.inv ? '<span class="inv-tag">'+INV_LABEL[c.inv]+'</span>' : ''); renderHint(c); }
+function showChord(){
+  const c=order[idx];
+  const kc=$('keyCtx');
+  if(c.rn){   // diatonic mode: show the roman numeral + key, hide the note hint (that'd give the answer away)
+    if(kc){ kc.textContent = 'key of ' + c.keyName; kc.style.display='block'; }
+    chordName.innerHTML = '<span class="rn-prompt">'+c.rn+'</span>';
+    clearHint();
+    return;
+  }
+  if(kc) kc.style.display='none';
+  chordName.innerHTML = c.name + (c.inv ? '<span class="inv-tag">'+INV_LABEL[c.inv]+'</span>' : '');
+  renderHint(c);
+}
 
 // The keyboard is always shown for the current chord (renderHint); clearHint hides it,
 // e.g. on the finished screen where there's no current chord.
@@ -976,6 +1030,7 @@ function migrateLegacy(){   // old local keys → current local key (guest histo
 // chord count for a mode key: type × root × selected voicing. "major"→12,
 // "major|0,1"→24, "major+minor|0,1,2"→72. (Root-only has no "|" → 1 voicing.)
 function countForMode(mode){
+  if(mode.startsWith('diatonic')) return DIATONIC.length;   // 7 diatonic triads
   const [typePart, invPart] = mode.split('|');
   const types = typePart.split('+').length;
   const invs  = invPart ? invPart.split(',').length : 1;
@@ -1139,6 +1194,27 @@ $("startBtn").onclick=start;
 document.querySelectorAll(".filter[data-type]").forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
 document.querySelectorAll(".filter[data-inv]").forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
 $("freeBtn").onclick = toggleFreestyle;   // "any voicing" = freestyle (accept any inversion)
+// TEST-TYPE switch — chords & diatonic are in-page modes (shared engine); voice leading is its own page
+function setTestMode(m){
+  if(phase==="running") return;
+  if(m === 'voice'){ location.href = '/voice-leading'; return; }
+  testMode = m;
+  document.querySelectorAll('#modebar .mode-opt').forEach(x=>x.classList.toggle('active', x.dataset.mode===m));
+  const dia = m === 'diatonic';
+  $('typeCombo').style.display = dia ? 'none' : '';
+  document.querySelector('.combo-x').style.display = dia ? 'none' : '';
+  $('invGroup').style.display = dia ? 'none' : '';
+  $('keyPicker').style.display = dia ? '' : 'none';
+  start();   // fresh run in the newly selected test
+}
+document.querySelectorAll('#modebar .mode-opt').forEach(b=>b.onclick=()=>setTestMode(b.dataset.mode));
+// Diatonic key picker (single-select)
+document.querySelectorAll('#keybar .filter[data-key]').forEach(b=>b.onclick=()=>{
+  if(phase==="running") return;
+  diatonicKey = +b.dataset.key;
+  document.querySelectorAll('#keybar .filter[data-key]').forEach(x=>x.classList.toggle('active', x===b));
+  reconfigure();
+});
 document.addEventListener("keydown",e=>{ if(e.code==="Space"&&modal.hidden){ e.preventDefault(); start(); } });
 
 $('authClose').addEventListener('click', closeModal);
@@ -1204,7 +1280,9 @@ loginForm.addEventListener('submit', handleLogin);
 
 /* ---------- Init ---------- */
 migrateLegacy();
-renderAuth().then(() => showStage());
+// deep-link: /?test=diatonic opens straight into the diatonic test (e.g. from the voice-leading selector)
+const _initDiatonic = new URLSearchParams(location.search).get('test') === 'diatonic';
+renderAuth().then(() => { if(_initDiatonic) setTestMode('diatonic'); else showStage(); });
 syncStartBtn();
 updateSoundBtn();
 initMidi();
