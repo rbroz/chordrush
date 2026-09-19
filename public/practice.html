@@ -358,8 +358,9 @@ function renderBoard(){
     let hi = Math.max(...all) + 2; while(!isW(hi)) hi++;
     boardChords = order.map((o,i) => {
       const notes = route.voicings[i].notes, r = ROOTS.find(x => x.pc === o.root);
+      // no `bass` → lights on the correct chord in ANY voicing; the shown voicing is the suggested smooth one
       return { name: r.name + CHORD_TYPES[o.qual].suffix, type: o.qual,
-               pcs: notes.map(n => n%12), bass: notes[0]%12, rn: o.rn, voiced: notes };
+               pcs: notes.map(n => n%12), rn: o.rn, voiced: notes };
     });
     $("boardHdr").textContent = 'the smoothest route through a random sequence of ' + keyName(diatonicKey) + ' — reshuffle below';
     litState = boardChords.map(()=>false);
