@@ -21,6 +21,10 @@
   .hm-leg-bar { width:120px; height:10px; border-radius:5px; background:linear-gradient(to right, hsl(18,85%,90%), hsl(18,85%,45%)); }
   .hm-leg-range { color:#bbb; }
   .hm-tip { position:fixed; z-index:20; pointer-events:none; background:#2b2b2b; color:#fff; font-size:12px; padding:5px 9px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-135%); }
+  .dash-export { text-align:center; }
+  .export-note { color:var(--muted); font-size:13px; margin:6px 0 16px; }
+  .export-btn { font-family:var(--mono); font-size:14px; color:var(--accent); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:11px 20px; cursor:pointer; }
+  .export-btn:hover { border-color:var(--accent); }
 </style>
 </head>
 <body>
@@ -105,6 +109,12 @@
         <div class="hm-legend" id="hmLegend"></div>
         <div class="hm-tip" id="hmTip" style="display:none"></div>
       </div>
+
+      <div class="dash-section dash-export">
+        <div class="dash-title">practice log</div>
+        <p class="export-note">Download the last 7 days as a JSON — per-day summary plus a per-chord breakdown (slowest first) — to share with your coach. Covers timed Test runs (chords + diatonic).</p>
+        <button class="export-btn" id="logBtn" type="button">↓ build practice log (last 7 days)</button>
+      </div>
     </div>
   </main>
 
@@ -132,6 +142,7 @@ const supabase = createClient(
 const $ = id => document.getElementById(id);
 
 let allScores = [];
+let username = 'me';
 let mode = 'major';
 const TYPE_LABEL = { major:'majors', minor:'minors', maj7:'maj7', min7:'min7', dom7:'dom7' };
 const INV_LABEL  = ['root','1st inv','2nd inv','3rd inv'];
@@ -157,6 +168,103 @@ function labelForMode(m){
   if(invPart==='free') return types + ' · any voicing';
   return types + ' · ' + invPart.split(',').map(i=>INV_LABEL[+i]).join('/');
 }
+// readable label incl. diatonic mode keys ("diatonic|C" → "diatonic · key of C")
+function exportLabel(m){
+  if(m.startsWith('diatonic')){ const k = m.split('|')[1]; return 'diatonic · key of ' + (k || '?'); }
+  return labelForMode(m);
+}
+const localDay = d => new Date(d).toLocaleDateString('en-CA');            // YYYY-MM-DD, local
+const hhmm = d => new Date(d).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false });
+
+const WINDOW_DAYS = 7;
+// per-day mode aggregation, given that day's runs + all-time PBs
+function summarizeModes(runs, pb){
+  const byMode = {};
+  for(const r of runs){
+    const g = byMode[r.mode] || (byMode[r.mode] = { runs:0, times:[], chords:0, accSum:0, accN:0 });
+    g.runs++; g.times.push(r.time_ms); g.chords += r.chord_count || 0;
+    if(r.errors != null && r.chord_count){ g.accSum += r.chord_count/(r.chord_count + r.errors); g.accN++; }
+  }
+  return Object.keys(byMode).map(m => {
+    const g = byMode[m], best = Math.min(...g.times);
+    const out = { mode:m, label:exportLabel(m), runs:g.runs, chords_played:g.chords,
+                  best_time_s:+(best/1000).toFixed(2),
+                  avg_time_s:+(g.times.reduce((s,t)=>s+t,0)/g.times.length/1000).toFixed(2),
+                  all_time_best_s:+(pb[m]/1000).toFixed(2), new_personal_best: best <= pb[m] };
+    if(g.accN) out.accuracy_pct = Math.round(g.accSum/g.accN*100);
+    return out;
+  }).sort((a,b)=>b.runs-a.runs);
+}
+// Trailing 7-day practice log for the coach (Muse): per-day summary + a per-chord
+// breakdown (slowest first) so weak chords surface, not just mode averages.
+function buildTodayLog(){
+  const today = localDay(Date.now());
+  const from = new Date(Date.now() - (WINDOW_DAYS-1)*864e5);
+  const fromDay = localDay(from);
+  const win = allScores.filter(r => localDay(r.played_at || r.created_at) >= fromDay);
+
+  // all-time best per mode (from full history), for the "beat my PB?" signal
+  const pb = {};
+  for(const r of allScores){ if(pb[r.mode]==null || r.time_ms < pb[r.mode]) pb[r.mode] = r.time_ms; }
+
+  // group the window by day
+  const byDay = {};
+  for(const r of win){ const d = localDay(r.played_at || r.created_at); (byDay[d] || (byDay[d]=[])).push(r); }
+  const by_day = Object.keys(byDay).sort().map(date => {
+    const runs = byDay[date];
+    const times = runs.map(r => new Date(r.played_at || r.created_at)).sort((a,b)=>a-b);
+    return {
+      date,
+      runs: runs.length,
+      chords_played: runs.reduce((s,r)=>s+(r.chord_count||0), 0),
+      time_racing_seconds: Math.round(runs.reduce((s,r)=>s+(r.time_ms||0), 0)/1000),
+      first_run: hhmm(times[0]), last_run: hhmm(times[times.length-1]),
+      modes: summarizeModes(runs, pb),
+    };
+  });
+
+  // per-chord breakdown over the window — TIME from splits, ACCURACY from chord_errors
+  // (both keyed identically per landing), slowest avg first = weakest.
+  const cs = {};
+  const bucket = k => cs[k] || (cs[k] = { times:[], landings:0, misses:0 });
+  for(const r of win){
+    if(r.splits) for(const k in r.splits){ const ms = r.splits[k]; if(ms!=null) bucket(k).times.push(ms); }
+    if(r.chord_errors) for(const k in r.chord_errors){ const g = bucket(k); g.landings++; g.misses += r.chord_errors[k]||0; }
+  }
+  const by_chord = Object.keys(cs).map(k => {
+    const g = cs[k], out = { chord:k, plays:g.times.length };
+    if(g.times.length){ out.avg_time_s = +(g.times.reduce((s,x)=>s+x,0)/g.times.length/1000).toFixed(2);
+                        out.best_time_s = +(Math.min(...g.times)/1000).toFixed(2); }
+    if(g.landings){ out.misses = g.misses; out.accuracy_pct = Math.round(g.landings/(g.landings+g.misses)*100); }
+    return out;
+  }).sort((a,b)=>(b.avg_time_s||0) - (a.avg_time_s||0));
+
+  const log = {
+    app: 'chordrush',
+    type: 'practice_log',
+    user: username,
+    generated_at: new Date().toISOString(),
+    window: { days: WINDOW_DAYS, from: fromDay, to: today },
+    note: 'Covers timed Test runs (chords + diatonic). Per-chord breakdown includes TIME (all runs) and ACCURACY (accuracy_pct/misses; only for runs recorded after per-chord error logging shipped — older runs are time-only). Practice-mode warmups and Voice Leading are not logged yet.',
+    totals: {
+      active_days: by_day.length,
+      runs: win.length,
+      chords_played: win.reduce((s,r)=>s+(r.chord_count||0), 0),
+      time_racing_seconds: Math.round(win.reduce((s,r)=>s+(r.time_ms||0), 0)/1000),
+    },
+    by_day,
+    by_chord,
+  };
+  downloadJson(log, 'chordrush-' + fromDay + '_to_' + today + '.json');
+}
+function downloadJson(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 init();
 async function init(){
@@ -165,8 +273,9 @@ async function init(){
   if(!session){ $('dashGate').hidden=false; $('dashContent').hidden=true; return; }
   $('dashGate').hidden=true; $('dashContent').hidden=false;
 
+  username = session.user.user_metadata?.username || 'me';
   const { data, error } = await supabase.from('scores')
-    .select('mode, time_ms, chord_count, splits, played_at, created_at');
+    .select('mode, time_ms, chord_count, errors, splits, chord_errors, played_at, created_at');
   if(error){ console.error(error); return; }
   allScores = (data||[]).sort((a,b) =>
     new Date(a.played_at||a.created_at) - new Date(b.played_at||b.created_at));
@@ -174,6 +283,7 @@ async function init(){
   document.querySelectorAll('.filter[data-type]').forEach(b=>b.onclick=()=>toggleType(b.dataset.type));
   document.querySelectorAll('#invToggle .filter[data-inv]').forEach(b=>b.onclick=()=>toggleInv(+b.dataset.inv));
   $('freeBtn').onclick = toggleFreestyle;
+  $('logBtn').onclick = buildTodayLog;
   renderKpis();
   refresh();          // sets active chips + mode + renders the line chart
   renderHeatmap();    // per-chord speed heatmap (independent of the toggles)

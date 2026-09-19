@@ -457,6 +457,7 @@ const CHORD_WINDOW=80;                    // ms: the full chord must be struck w
 let graspTimer=null;                      // fires if the chord isn't completed in time → "not all at once"
 let order=[], idx=0, phase="idle";      // idle | ready | running | done
 let startTime=0, completions=[], rafId=null, runSplits={};   // runSplits: this run's per-chord landing times
+let runMisses={}, curMisses=0;   // per-chord misses, keyed like runSplits; curMisses = misses on the current target
 let wrongEntries=0, erroredSet=new Set();   // accuracy: total mistakes, and which chord indices had >=1 miss
 const sessionRuns={};                   // modeKey -> last finished run this session (for restoring the view)
 let currentSession=null;                // set by renderAuth(); drives DB-vs-localStorage
@@ -661,7 +662,7 @@ function disarmGrasp(){ clearTimeout(graspTimer); graspTimer=null; }
 // only once the clock is running, so pre-test warm-up doesn't count.
 function markMiss(){
   if(phase!=="running") return;
-  wrongEntries++; erroredSet.add(idx);
+  wrongEntries++; erroredSet.add(idx); curMisses++;
   if(hErr) hErr.textContent=wrongEntries;
   flashBad();
 }
@@ -750,7 +751,7 @@ function start(){
   errBox.style.display="none";
   cancelAnimationFrame(rafId);   // kill any timer still running (e.g. restart mid-run) so loops don't stack
   order=buildOrder();
-  idx=0; completions=[]; startTime=0; runSplits={}; phase="ready";
+  idx=0; completions=[]; startTime=0; runSplits={}; runMisses={}; curMisses=0; phase="ready";
   erroredSet=new Set(); wrongEntries=0; disarmGrasp(); if(hErr) hErr.textContent="0";
   doneWrap.style.display="none"; idleMsg.style.display="none"; playWrap.style.display="block";
   lockFilters(false);   // stays changeable until the clock starts
@@ -825,7 +826,8 @@ function advance(){
   const now=performance.now();
   flash();
   if(phase==="ready"){                 // first chord = the go-signal
-    runSplits[splitKey(order[0], Math.min(...heldNotes.keys())%12)] = null;   // start chord — no landing time
+    const k0 = splitKey(order[0], Math.min(...heldNotes.keys())%12);
+    runSplits[k0] = null; runMisses[k0] = curMisses; curMisses = 0;   // start chord — no landing time
     startTime=now; completions=[now]; phase="running";
     lockFilters(true);  // lock the pool now that the clock is running
     hud.style.display="flex";           // reveal the timer now that the clock is running
@@ -836,7 +838,9 @@ function advance(){
     tick();
     return;
   }
-  runSplits[splitKey(order[idx], Math.min(...heldNotes.keys())%12)] = Math.round(now - completions[completions.length-1]);
+  const k = splitKey(order[idx], Math.min(...heldNotes.keys())%12);
+  runSplits[k] = Math.round(now - completions[completions.length-1]);
+  runMisses[k] = curMisses; curMisses = 0;
   completions.push(now);
   idx++;
   if(idx>=order.length){ finish(); return; }
@@ -865,7 +869,7 @@ async function finish(){
   $("doneTotal").innerHTML=total.toFixed(2)+'s <span class="done-avg">'+(total/order.length).toFixed(2)+'s/chord · '+acc+'% acc</span>';
 
   // save the run (DB if logged in, else localStorage), then read back the fresh top 5
-  await addScore(modeKey(), timeMs, order.length, playedAt, runSplits, wrongEntries);
+  await addScore(modeKey(), timeMs, order.length, playedAt, runSplits, wrongEntries, runMisses);
   const top = await getLeaderboard(modeKey());
   const rank = top.findIndex(e => e.t.toFixed(2) === total.toFixed(2));
 
@@ -1005,11 +1009,11 @@ async function getLeaderboard(mode){
   return data.map(r => ({ name:r.username, t:r.time_ms/1000, c:r.chord_count, er:r.errors, d:r.played_at }));
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-async function addScore(mode, timeMs, chordCount, playedAt, splits, errors){
+async function addScore(mode, timeMs, chordCount, playedAt, splits, errors, chordErrors){
   if(currentSession){
     // played_at is the run's unique key; on conflict the DB ignores the dup
     const { error } = await supabase.from('scores').upsert(
-      { user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount, played_at: playedAt, splits, device: currentInput?.name || null, errors },
+      { user_id: currentSession.user.id, mode, time_ms: timeMs, chord_count: chordCount, played_at: playedAt, splits, chord_errors: chordErrors, device: currentInput?.name || null, errors },
       { onConflict:'user_id,played_at', ignoreDuplicates:true }
     );
     if(error) console.error('addScore', error);
