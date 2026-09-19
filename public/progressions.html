@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Voice Leading — ChordRush</title>
-<meta name="description" content="Voice-leading trainer for piano: connect a chord progression by moving your hand as little as possible. Timed, with the smoothest route revealed.">
-<link rel="canonical" href="https://chordrush.app/voice-leading">
+<title>Progressions — ChordRush</title>
+<meta name="description" content="Progression trainer for piano: run ii–V–I and other diatonic progressions across keys on your MIDI keyboard. Triads advance, 7ths score bonus points.">
+<link rel="canonical" href="https://chordrush.app/progressions">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="stylesheet" href="/style.css">
@@ -16,7 +16,7 @@
   .vl-keys { align-items: center; margin: 10px 0 2px; }
   .vl-hdr { text-align: center; color: var(--muted); font-size: 13px; margin: 20px 0 26px; }
   .vl-prog { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; }
-  .vl-chord { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; font-family: var(--mono); font-weight: 700; font-size: clamp(52px, 8vw, 80px); color: var(--muted); transition: color .1s; }
+  .vl-chord { display: inline-flex; flex-direction: row; align-items: center; gap: 16px; font-family: var(--mono); font-weight: 700; font-size: clamp(52px, 8vw, 80px); color: var(--muted); transition: color .1s; }
   .vl-chord.current { color: var(--accent); }
   .vl-chord.next { opacity: .5; }   /* one-chord look-ahead preview */
   .vl-chord.done { color: var(--text); }
@@ -41,6 +41,13 @@
   .vl-arrow { color: var(--muted); font-size: 20px; }
   .hint-kbd { max-width: 100%; height: auto; }
   .hint-kbd text { font-family: var(--mono); font-weight: 600; }
+  .prog-live { display: flex; flex-direction: column; align-items: center; }
+  .prog-ctx { font-family: var(--mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; min-height: 16px; }
+  .prog-hud { display: flex; gap: 28px; margin-top: 26px; font-family: var(--mono); font-size: 15px; color: var(--muted); }
+  .prog-hud b { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .prog-breakdown { font-family: var(--mono); font-size: 14px; color: var(--muted); margin: 2px 0 30px; }
+  .pk-key { color: var(--text); }        /* the key, same size as the roman numeral */
+  .pk-sep { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -72,8 +79,8 @@
       <div class="mode-switch">
         <button class="mode-opt" onclick="location.href='/'">chords</button>
         <button class="mode-opt" onclick="location.href='/diatonic'">diatonic</button>
-        <button class="mode-opt active">voice leading</button>
-        <button class="mode-opt" onclick="location.href='/progressions'">progressions</button>
+        <button class="mode-opt" onclick="location.href='/voice-leading'">voice leading</button>
+        <button class="mode-opt active">progressions</button>
       </div>
     </div>
     <div class="vl-wrap">
@@ -85,33 +92,44 @@
         <button id="soundBtn" type="button"></button>
       </div>
       <div class="filter-group vl-keys">
-        <span class="fg-label">key</span>
-        <div class="filterbar" id="keybar">
-          <button class="filter active" data-key="0">C</button>
-          <button class="filter" data-key="1">C♯</button>
-          <button class="filter" data-key="2">D</button>
-          <button class="filter" data-key="3">E♭</button>
-          <button class="filter" data-key="4">E</button>
-          <button class="filter" data-key="5">F</button>
-          <button class="filter" data-key="6">F♯</button>
-          <button class="filter" data-key="7">G</button>
-          <button class="filter" data-key="8">A♭</button>
-          <button class="filter" data-key="9">A</button>
-          <button class="filter" data-key="10">B♭</button>
-          <button class="filter" data-key="11">B</button>
+        <span class="fg-label">progression</span>
+        <div class="filterbar" id="progbar">
+          <button class="filter active" data-prog="ii-V-I">ii–V–I</button>
+          <button class="filter" data-prog="vi-ii-V-I">vi–ii–V–I</button>
+          <button class="filter" data-prog="I-vi-ii-V">I–vi–ii–V</button>
         </div>
       </div>
-      <div class="vl-hdr" id="vlHdr">voice-lead through C — move your hand as little as possible</div>
-      <div class="vl-prog" id="vlProg"></div>
+      <div class="filter-group vl-keys">
+        <span class="fg-label">keys to scramble</span>
+        <div class="filterbar" id="keybar">
+          <button class="filter active" data-key="0">C</button>
+          <button class="filter active" data-key="1">C♯</button>
+          <button class="filter active" data-key="2">D</button>
+          <button class="filter active" data-key="3">E♭</button>
+          <button class="filter active" data-key="4">E</button>
+          <button class="filter active" data-key="5">F</button>
+          <button class="filter active" data-key="6">F♯</button>
+          <button class="filter active" data-key="7">G</button>
+          <button class="filter active" data-key="8">A♭</button>
+          <button class="filter active" data-key="9">A</button>
+          <button class="filter active" data-key="10">B♭</button>
+          <button class="filter active" data-key="11">B</button>
+        </div>
+      </div>
+      <div class="vl-hdr" id="vlHdr">play the progression — triad advances, 7th scores bonus points</div>
+      <div class="prog-live" id="progLive">
+        <div class="prog-ctx" id="progCtx"></div>
+        <div class="vl-prog" id="vlProg"></div>
+        <div class="prog-hud" id="progHud"></div>
+      </div>
 
       <div class="vl-results" id="vlResults" hidden>
         <div class="vl-scores">
-          <div class="vl-score"><div class="vl-val" id="vlTime">—</div><div class="vl-lab">time</div></div>
-          <div class="vl-score"><div class="vl-val" id="vlDist">—</div><div class="vl-lab">over best</div></div>
+          <div class="vl-score"><div class="vl-val" id="rScore">—</div><div class="vl-lab">score</div></div>
+          <div class="vl-score"><div class="vl-val" id="rTime">—</div><div class="vl-lab">time</div></div>
         </div>
-        <div class="vl-reveal-lab">the smoothest route</div>
-        <div class="vl-route" id="vlRoute"></div>
-        <div class="vl-replay-lab">play to replay · space for a new order</div>
+        <div class="prog-breakdown" id="rBreakdown"></div>
+        <div class="vl-replay-lab">press space for a new run</div>
       </div>
     </div>
   </main>
@@ -146,19 +164,32 @@ const ROOTS = [
   {name:"A♭",pc:8},{name:"A",pc:9},{name:"B♭",pc:10},{name:"B",pc:11},
 ];
 const CHORD_TYPES = {
-  major: { suffix:" Major", sym:"",  ivals:[0,4,7] },
-  minor: { suffix:" minor", sym:"m", ivals:[0,3,7] },
-  dim:   { suffix:" dim",   sym:"°", ivals:[0,3,6] },
+  major: { suffix:" Major", sym:"",     ivals:[0,4,7] },
+  minor: { suffix:" minor", sym:"m",    ivals:[0,3,7] },
+  dim:   { suffix:" dim",   sym:"°",    ivals:[0,3,6] },
+  maj7:  { suffix:" maj7",  sym:"maj7", ivals:[0,4,7,11] },
+  min7:  { suffix:" m7",    sym:"m7",   ivals:[0,3,7,10] },
+  dom7:  { suffix:"7",      sym:"7",    ivals:[0,4,7,10] },
+  m7b5:  { suffix:" m7♭5",  sym:"m7♭5", ivals:[0,3,6,10] },
 };
 const PC_NAME = {}; ROOTS.forEach(r => PC_NAME[r.pc] = r.name);
-// diatonic triads of a major key (deg = semitones above tonic, + quality + roman numeral)
+// diatonic degrees of a major key: triad quality + diatonic 7th quality + roman numeral
 const DIATONIC = [
-  {deg:0,qual:'major',rn:'I'},   {deg:2,qual:'minor',rn:'ii'}, {deg:4,qual:'minor',rn:'iii'},
-  {deg:5,qual:'major',rn:'IV'},  {deg:7,qual:'major',rn:'V'},  {deg:9,qual:'minor',rn:'vi'},
-  {deg:11,qual:'dim',rn:'vii°'},
+  {deg:0, qual:'major', q7:'maj7', rn:'I'},   {deg:2, qual:'minor', q7:'min7', rn:'ii'},
+  {deg:4, qual:'minor', q7:'min7', rn:'iii'}, {deg:5, qual:'major', q7:'maj7', rn:'IV'},
+  {deg:7, qual:'major', q7:'dom7', rn:'V'},   {deg:9, qual:'minor', q7:'min7', rn:'vi'},
+  {deg:11,qual:'dim',   q7:'m7b5', rn:'vii°'},
 ];
+// progressions = ordered sequences of DIATONIC indices
+const PROGRESSIONS = {
+  'ii-V-I':    { label:'ii–V–I',    steps:[1,4,0] },
+  'vi-ii-V-I': { label:'vi–ii–V–I', steps:[5,1,4,0] },
+  'I-vi-ii-V': { label:'I–vi–ii–V', steps:[0,5,1,4] },
+};
 const keyName = pc => ROOTS.find(r => r.pc === ((pc%12)+12)%12).name;
-let vlKey = 0;   // pitch class of the chosen key (default C)
+let progName = 'ii-V-I';                              // selected progression
+const selectedKeys = new Set([0,1,2,3,4,5,6,7,8,9,10,11]);   // keys included in the scramble
+const PTS_TRIAD = 10, PTS_SEVENTH = 15, PTS_SPEED = 5, SPEED_MS = 2000;   // scoring
 function chordFor(r, type, inv){
   const T = CHORD_TYPES[type];
   const pcs = T.ivals.map(i => (r.pc + i) % 12);
@@ -260,67 +291,66 @@ function optimalRoute(prog){
 }
 
 /* ---------- game ---------- */
-let progression = [], played = [], step = 0, phase = 'ready';
-let startTime = 0, endTime = 0;
+let run = [], step = 0, phase = 'ready';        // run = ordered targets across the chosen key(s)
+let startTime = 0, lastLand = 0;                 // clock + last landing (for the speed bonus)
+let score = 0, sevenths = 0, landTimes = [];
 const held = new Map();
 
-// the chosen key's 7 diatonic triads, shuffled into a random order
-function keyProgression(){
-  return shuffled(DIATONIC).map(d => {
-    const pc = (vlKey + d.deg) % 12, r = ROOTS[pc], type = d.qual;
-    return { root: pc, type, ivals: CHORD_TYPES[type].ivals, pcs: chordFor(r, type, 0).pcs,
-             name: r.name + CHORD_TYPES[type].suffix, rn: d.rn };
-  });
+// one target = a chord to play: its triad pcs (advance) + its diatonic-7th pcs (advance + bonus)
+function makeTarget(key, degIdx){
+  const d = DIATONIC[degIdx], r = ROOTS[(key + d.deg) % 12];
+  return { keyName: keyName(key), rn: d.rn, name: r.name + CHORD_TYPES[d.qual].suffix,
+           triad: chordFor(r, d.qual, 0).pcs, seventh: chordFor(r, d.q7, 0).pcs };
+}
+function buildRun(){
+  const keys = shuffled([...selectedKeys]);   // the chosen keys, scrambled
+  const steps = PROGRESSIONS[progName].steps, out = [];
+  for(const k of keys) for(const di of steps) out.push(makeTarget(k, di));
+  return out;
 }
 function newRound(){
-  progression = keyProgression(); played = []; step = 0; phase = 'ready';
+  run = buildRun(); step = 0; phase = 'ready';
+  score = 0; sevenths = 0; landTimes = [];
   $('vlResults').hidden = true;
-  $('vlHdr').textContent = 'voice-lead through ' + keyName(vlKey) + ' — move your hand as little as possible';
-  renderProg();
+  $('vlHdr').textContent = 'play the progression — triad advances, 7th scores bonus points';
+  render();
 }
-// during the test show only the current chord (mirrors the chord race — one at a time)
-function chordSpan(ch, cls){ return '<span class="vl-chord '+cls+'"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</span>'; }
-function renderProg(){
-  $('vlProg').innerHTML = chordSpan(progression[step], 'current');
+function render(){
+  const t = run[step];
+  $('progCtx').textContent = PROGRESSIONS[progName].label + '  ·  ' + (step+1) + ' / ' + run.length;
+  // big prompt reads "C · V" — key (context) then roman numeral (the chord to derive)
+  $('vlProg').innerHTML = '<span class="vl-chord current"><span class="pk-key">'+t.keyName+'</span><span class="pk-sep">·</span><span>'+t.rn+'</span></span>';
+  $('progHud').innerHTML = 'score <b>'+score+'</b>';
 }
+const sameSet = (arr, set) => arr.length === set.size && arr.every(x => set.has(x));
 function checkStep(){
   if(phase === 'done') return;
-  const notes = [...held.keys()];
-  if(notes.length !== 3) return;
-  const pcs = new Set(notes.map(n => ((n%12)+12)%12));
-  if(pcs.size !== 3) return;
-  for(const t of progression[step].pcs) if(!pcs.has(t)) return;   // must be exactly this triad (any voicing)
-  recordStep(notes.slice().sort((a,b)=>a-b));
+  const t = run[step], pcs = [...new Set([...held.keys()].map(n => ((n%12)+12)%12))];
+  if(sameSet(pcs, new Set(t.triad)))        return land(false);
+  if(sameSet(pcs, new Set(t.seventh)))      return land(true);
 }
-function recordStep(notes){
-  played[step] = notes;
-  if(step === 0){ $('vlResults').hidden = true; startTime = performance.now(); phase = 'playing'; }
+function land(is7){
+  const now = performance.now();
+  if(step === 0){ startTime = now; lastLand = now; phase = 'playing'; $('vlResults').hidden = true; }
+  const dt = now - lastLand; lastLand = now;
+  if(step > 0) landTimes.push(dt);
+  let pts = is7 ? PTS_SEVENTH : PTS_TRIAD;
+  if(step > 0 && dt < SPEED_MS) pts += PTS_SPEED;    // speed bonus (not on the go-signal chord)
+  score += pts; if(is7) sevenths++;
   step++;
-  if(step >= progression.length){ endTime = performance.now(); finish(); return; }
-  renderProg();
+  if(step >= run.length){ finish(); return; }
+  render();
 }
 function finish(){
-  const secs = (endTime - startTime) / 1000;
-  let yours = 0;
-  for(let i=1;i<played.length;i++) yours += transDist(played[i-1], played[i]);
-  const opt = optimalRoute(progression);
-  const best = Math.min(opt.distance, yours);   // guard: never show "you beat the best"
-  const pct = Math.round((yours - best) / best * 100);   // how far above the smoothest route
-  $('vlTime').textContent = secs.toFixed(2) + 's';
-  $('vlDist').innerHTML = (pct === 0 ? 'optimal ✓' : '+' + pct + '%')
-    + ' <span class="vl-sub">' + yours + ' semis · best ' + best + '</span>';
-  // reveal the smoothest route — the optimal voicings on one shared keyboard window
-  const all = opt.voicings.flatMap(v => v.notes);
-  let lo = Math.min(...all) - 2; while(!isW(lo)) lo--;
-  let hi = Math.max(...all) + 2; while(!isW(hi)) hi++;
-  $('vlRoute').innerHTML = progression.map((ch,i) =>
-    '<div class="vl-card"><div class="vl-kbd">'+routeKbd(opt.voicings[i].notes, lo, hi)+'</div>'
-    + '<div class="vl-nm"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</div></div>'
-  ).join('<span class="vl-arrow">→</span>');
+  phase = 'done';
+  const secs = (performance.now() - startTime) / 1000;
+  const avg = landTimes.length ? landTimes.reduce((s,x)=>s+x,0)/landTimes.length/1000 : 0;
+  $('rScore').textContent = score;
+  $('rTime').textContent = secs.toFixed(2) + 's';
+  $('rBreakdown').textContent = run.length + ' chords · ' + sevenths + ' played as 7ths · ' + avg.toFixed(2) + 's/chord';
+  $('progCtx').textContent = ''; $('vlProg').innerHTML = ''; $('progHud').innerHTML = '';   // done screen = stats only
   $('vlResults').hidden = false;
-  $('vlProg').innerHTML = '';   // clear the top prompt on the done screen (results/reveal are the focus)
-  // reset to replay the SAME progression on the next play (results stay as a reference); spacebar = a new one
-  played = []; step = 0; phase = 'ready';
+  // stays 'done' until spacebar starts a fresh run
 }
 
 /* ---------- MIDI ---------- */
@@ -438,12 +468,19 @@ function renderNav(session){
 
 /* ---------- wiring ---------- */
 document.addEventListener('keydown', e => {
-  if(e.code === 'Space'){ e.preventDefault(); newRound(); }   // spacebar = a fresh order, anytime
+  if(e.code === 'Space'){ e.preventDefault(); newRound(); }   // spacebar = a fresh run, anytime
 });
-// key picker — a new key gives a new diatonic sequence
+document.querySelectorAll('#progbar .filter[data-prog]').forEach(b => b.onclick = () => {
+  progName = b.dataset.prog;
+  document.querySelectorAll('#progbar .filter[data-prog]').forEach(x => x.classList.toggle('active', x === b));
+  newRound();
+});
+// keys are multi-select: click to include/exclude from the scramble (keep at least one)
 document.querySelectorAll('#keybar .filter[data-key]').forEach(b => b.onclick = () => {
-  vlKey = +b.dataset.key;
-  document.querySelectorAll('#keybar .filter[data-key]').forEach(x => x.classList.toggle('active', x === b));
+  const k = +b.dataset.key;
+  if(selectedKeys.has(k)){ if(selectedKeys.size === 1) return; selectedKeys.delete(k); }
+  else selectedKeys.add(k);
+  b.classList.toggle('active', selectedKeys.has(k));
   newRound();
 });
 

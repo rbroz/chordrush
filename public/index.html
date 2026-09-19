@@ -127,6 +127,7 @@
         <button class="mode-opt active" data-mode="chords">chords</button>
         <button class="mode-opt" data-mode="diatonic">diatonic</button>
         <button class="mode-opt" data-mode="voice">voice leading</button>
+        <button class="mode-opt" data-mode="prog">progressions</button>
       </div>
     </div>
     <div class="filterbars">
@@ -1209,6 +1210,7 @@ $("freeBtn").onclick = toggleFreestyle;   // "any voicing" = freestyle (accept a
 function setTestMode(m){
   if(phase==="running") return;
   if(m === 'voice'){ location.href = '/voice-leading'; return; }
+  if(m === 'prog'){ location.href = '/progressions'; return; }
   testMode = m;
   document.querySelectorAll('#modebar .mode-opt').forEach(x=>x.classList.toggle('active', x.dataset.mode===m));
   const dia = m === 'diatonic';
