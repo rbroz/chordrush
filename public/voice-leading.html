@@ -16,14 +16,15 @@
   .vl-keys { align-items: center; margin: 10px 0 2px; }
   .vl-hdr { text-align: center; color: var(--muted); font-size: 13px; margin: 20px 0 26px; }
   .vl-prog { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; }
-  .vl-chord { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--mono); font-weight: 700; font-size: clamp(19px, 3vw, 28px); color: var(--muted); transition: color .1s; }
+  .vl-chord { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; font-family: var(--mono); font-weight: 700; font-size: clamp(52px, 8vw, 80px); color: var(--muted); transition: color .1s; }
   .vl-chord.current { color: var(--accent); }
+  .vl-chord.next { opacity: .5; }   /* one-chord look-ahead preview */
   .vl-chord.done { color: var(--text); }
-  .vl-rn { font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
+  .vl-rn { font-size: 15px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
   .vl-chord.current .vl-rn { color: var(--accent); }
   .vl-card .vl-nm { display: flex; flex-direction: column; align-items: center; gap: 1px; }
   .vl-replay-lab { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-  .vl-sep { color: var(--line); font-size: 22px; }
+  .vl-sep { color: var(--text); font-size: 34px; }
   .vl-prompt { font-family: var(--mono); font-size: 15px; color: var(--muted); margin: 30px 0 0; min-height: 22px; }
   .vl-results { display: flex; flex-direction: column; align-items: center; margin-top: 34px; }
   .vl-results[hidden] { display: none; }   /* let the hidden attribute win over display:flex */
@@ -105,7 +106,7 @@
       <div class="vl-results" id="vlResults" hidden>
         <div class="vl-scores">
           <div class="vl-score"><div class="vl-val" id="vlTime">—</div><div class="vl-lab">time</div></div>
-          <div class="vl-score"><div class="vl-val" id="vlDist">—</div><div class="vl-lab">distance</div></div>
+          <div class="vl-score"><div class="vl-val" id="vlDist">—</div><div class="vl-lab">over best</div></div>
         </div>
         <div class="vl-reveal-lab">the smoothest route</div>
         <div class="vl-route" id="vlRoute"></div>
@@ -276,11 +277,10 @@ function newRound(){
   $('vlHdr').textContent = 'voice-lead through ' + keyName(vlKey) + ' — move your hand as little as possible';
   renderProg();
 }
+// during the test show only the current chord (mirrors the chord race — one at a time)
+function chordSpan(ch, cls){ return '<span class="vl-chord '+cls+'"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</span>'; }
 function renderProg(){
-  $('vlProg').innerHTML = progression.map((ch,i) => {
-    const cls = 'vl-chord' + (i < step ? ' done' : '') + (i === step && phase !== 'done' ? ' current' : '');
-    return '<span class="'+cls+'"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</span>';
-  }).join('<span class="vl-sep">→</span>');
+  $('vlProg').innerHTML = chordSpan(progression[step], 'current');
 }
 function checkStep(){
   if(phase === 'done') return;
@@ -304,8 +304,10 @@ function finish(){
   for(let i=1;i<played.length;i++) yours += transDist(played[i-1], played[i]);
   const opt = optimalRoute(progression);
   const best = Math.min(opt.distance, yours);   // guard: never show "you beat the best"
+  const pct = Math.round((yours - best) / best * 100);   // how far above the smoothest route
   $('vlTime').textContent = secs.toFixed(2) + 's';
-  $('vlDist').innerHTML = yours + ' <span class="vl-sub">semitones · best ' + best + '</span>';
+  $('vlDist').innerHTML = (pct === 0 ? 'optimal ✓' : '+' + pct + '%')
+    + ' <span class="vl-sub">' + yours + ' semis · best ' + best + '</span>';
   // reveal the smoothest route — the optimal voicings on one shared keyboard window
   const all = opt.voicings.flatMap(v => v.notes);
   let lo = Math.min(...all) - 2; while(!isW(lo)) lo--;
@@ -315,9 +317,9 @@ function finish(){
     + '<div class="vl-nm"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</div></div>'
   ).join('<span class="vl-arrow">→</span>');
   $('vlResults').hidden = false;
+  $('vlProg').innerHTML = '';   // clear the top prompt on the done screen (results/reveal are the focus)
   // reset to replay the SAME progression on the next play (results stay as a reference); spacebar = a new one
   played = []; step = 0; phase = 'ready';
-  renderProg();
 }
 
 /* ---------- MIDI ---------- */
