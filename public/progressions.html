@@ -94,9 +94,10 @@
       <div class="filter-group vl-keys">
         <span class="fg-label">progression</span>
         <div class="filterbar" id="progbar">
-          <button class="filter active" data-prog="ii-V-I">ii–V–I</button>
-          <button class="filter" data-prog="vi-ii-V-I">vi–ii–V–I</button>
-          <button class="filter" data-prog="I-vi-ii-V">I–vi–ii–V</button>
+          <button class="filter active" data-prog="I-V-vi-IV">I–V–vi–IV</button>
+          <button class="filter" data-prog="vi-IV-I-V">vi–IV–I–V</button>
+          <button class="filter" data-prog="I-IV-V">I–IV–V</button>
+          <button class="filter" data-prog="ii-V-I">ii–V–I</button>
         </div>
       </div>
       <div class="filter-group vl-keys">
@@ -180,14 +181,15 @@ const DIATONIC = [
   {deg:7, qual:'major', q7:'dom7', rn:'V'},   {deg:9, qual:'minor', q7:'min7', rn:'vi'},
   {deg:11,qual:'dim',   q7:'m7b5', rn:'vii°'},
 ];
-// progressions = ordered sequences of DIATONIC indices
+// progressions = ordered sequences of DIATONIC indices (0:I 1:ii 2:iii 3:IV 4:V 5:vi 6:vii°)
 const PROGRESSIONS = {
-  'ii-V-I':    { label:'ii–V–I',    steps:[1,4,0] },
-  'vi-ii-V-I': { label:'vi–ii–V–I', steps:[5,1,4,0] },
-  'I-vi-ii-V': { label:'I–vi–ii–V', steps:[0,5,1,4] },
+  'I-V-vi-IV': { label:'I–V–vi–IV', steps:[0,4,5,3] },   // pop "axis" — the four chords
+  'vi-IV-I-V': { label:'vi–IV–I–V', steps:[5,3,0,4] },   // its rotation
+  'I-IV-V':    { label:'I–IV–V',    steps:[0,3,4] },      // blues/rock/folk backbone
+  'ii-V-I':    { label:'ii–V–I',    steps:[1,4,0] },      // jazz cornerstone
 };
 const keyName = pc => ROOTS.find(r => r.pc === ((pc%12)+12)%12).name;
-let progName = 'ii-V-I';                              // selected progression
+let progName = 'I-V-vi-IV';                           // selected progression (default = pop axis)
 const selectedKeys = new Set([0,1,2,3,4,5,6,7,8,9,10,11]);   // keys included in the scramble
 const PTS_TRIAD = 10, PTS_SEVENTH = 15, PTS_SPEED = 5, SPEED_MS = 2000;   // scoring
 function chordFor(r, type, inv){
