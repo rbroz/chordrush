@@ -41,6 +41,13 @@
   .vl-arrow { color: var(--muted); font-size: 20px; }
   .hint-kbd { max-width: 100%; height: auto; }
   .hint-kbd text { font-family: var(--mono); font-weight: 600; }
+  /* live per-move voice-leading tracker (builds one chip per transition) */
+  .vl-tracker { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 28px; min-height: 48px; }
+  .vlt-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .vlt-chip { font-family: var(--mono); font-size: 13px; font-weight: 700; min-width: 30px; text-align: center; padding: 6px 9px; border-radius: 8px; }
+  .vlt-chip.opt { color: var(--good); background: rgba(18,184,134,.12); }
+  .vlt-chip.over { color: var(--muted); background: var(--panel); border: 1px solid var(--line); }
+  .vlt-tally { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); min-height: 15px; }
 </style>
 </head>
 <body>
@@ -103,6 +110,10 @@
       </div>
       <div class="vl-hdr" id="vlHdr">voice-lead through C — move your hand as little as possible</div>
       <div class="vl-prog" id="vlProg"></div>
+      <div class="vl-tracker" id="vlTracker">
+        <div class="vlt-row" id="vltRow"></div>
+        <div class="vlt-tally" id="vltTally"></div>
+      </div>
 
       <div class="vl-results" id="vlResults" hidden>
         <div class="vl-scores">
@@ -276,7 +287,22 @@ function newRound(){
   progression = keyProgression(); played = []; step = 0; phase = 'ready';
   $('vlResults').hidden = true;
   $('vlHdr').textContent = 'voice-lead through ' + keyName(vlKey) + ' — move your hand as little as possible';
+  clearTracker();
   renderProg();
+}
+// --- live per-move tracker: judge each move against the smoothest reachable from where your hand was ---
+let cleanCount = 0, moveCount = 0;
+function clearTracker(){ cleanCount = 0; moveCount = 0; $('vltRow').innerHTML = ''; $('vltTally').textContent = ''; }
+function bestMoveFrom(prev, ch){   // min hand movement from `prev` voicing to any voicing of `ch`
+  let best = Infinity;
+  for(const v of voicings(ch)) best = Math.min(best, transDist(prev, v.notes));
+  return best;
+}
+function addMove(over){
+  moveCount++; if(over === 0) cleanCount++;
+  const chip = over === 0 ? '<span class="vlt-chip opt">✓</span>' : '<span class="vlt-chip over">+'+over+'</span>';
+  $('vltRow').insertAdjacentHTML('beforeend', chip);
+  $('vltTally').textContent = 'clean ' + cleanCount + ' / ' + moveCount;
 }
 // during the test show only the current chord (mirrors the chord race — one at a time)
 function chordSpan(ch, cls){ return '<span class="vl-chord '+cls+'"><span class="vl-rn">'+ch.rn+'</span>'+ch.name+'</span>'; }
@@ -294,7 +320,8 @@ function checkStep(){
 }
 function recordStep(notes){
   played[step] = notes;
-  if(step === 0){ $('vlResults').hidden = true; startTime = performance.now(); phase = 'playing'; }
+  if(step === 0){ $('vlResults').hidden = true; startTime = performance.now(); phase = 'playing'; clearTracker(); }
+  else addMove(transDist(played[step-1], notes) - bestMoveFrom(played[step-1], progression[step]));   // over = your move − smoothest reachable
   step++;
   if(step >= progression.length){ endTime = performance.now(); finish(); return; }
   renderProg();
