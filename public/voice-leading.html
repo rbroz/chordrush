@@ -337,7 +337,7 @@ function finish(){
   // log the run for the leaderboard (smoothness = semitones over optimal; ranked over then time)
   if(vlSession){
     supabase.from('scores').insert({
-      user_id: vlSession.user.id, mode: 'voiceleading',
+      user_id: vlSession.user.id, mode: 'voiceleading|' + keyName(vlKey),
       time_ms: Math.round(secs * 1000), chord_count: progression.length,
       score: yours - opt.distance, played_at: new Date().toISOString(),
     }).then(({ error }) => { if(error) console.error('vl save', error); });

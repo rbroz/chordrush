@@ -43,7 +43,6 @@
   .lb-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0; }
   .mode-row { margin-top: 4vh; }
   .lb-wrap { margin-top: 2vh; }
-  .lb-vl { max-width: 520px; margin: 0 auto; }
 </style>
 </head>
 <body>
@@ -78,12 +77,12 @@
       </div>
     </div>
     <div class="lb-wrap" id="lbChords">
-      <div class="lb-heading">every board · best time per player</div>
+      <div class="lb-heading">one board per chord type · best time per player · any voicing</div>
       <div class="lb-grid" id="lbGrid"><div class="lb-loading">loading boards…</div></div>
     </div>
     <div class="lb-wrap" id="lbVoice" hidden>
-      <div class="lb-heading">voice leading · smoothest run per player (ties broken by time)</div>
-      <div id="vlBoard"><div class="lb-loading">loading…</div></div>
+      <div class="lb-heading">voice leading · one board per key · smoothest run per player (ties broken by time)</div>
+      <div class="lb-grid" id="vlBoard"><div class="lb-loading">loading…</div></div>
     </div>
   </main>
 
@@ -111,44 +110,39 @@ const supabase = createClient(
 const $ = id => document.getElementById(id);
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-// label any Time Trials mode key (e.g. "major", "major|1", "major+minor|0,1,2")
-const TYPE_LABEL = { major:'majors', minor:'minors', maj7:'maj7', min7:'min7', dom7:'dom7' };
-const INV_LABEL = ['root','1st inv','2nd inv','3rd inv'];
-function labelForMode(m){
-  const [tp, ip] = m.split('|');
-  const types = tp.split('+').map(t => TYPE_LABEL[t] || t).join(' + ');
-  if(!ip)           return types + ' · root';
-  if(ip === 'free') return types + ' · any voicing';
-  return types + ' · ' + ip.split(',').map(i => INV_LABEL[+i] || i).join('/');
-}
+// one board per chord TYPE (voicings pooled — inversions are a tool to get faster, not their own board;
+// per-voicing detail lives in the dashboard). Order matches Time Trials' type layout.
+const TYPE_LABEL = { major:'majors', minor:'minors', dim:'dim', aug:'aug', sus2:'sus2', sus4:'sus4', maj7:'maj7', min7:'min7', dom7:'dom7' };
+const TYPE_ORDER = Object.keys(TYPE_LABEL);
 
-// one call returns every populated board (all players, best time each); render a card per mode that has plays
+// get_all_boards returns best time per player per mode; pool a type's voicings into one board (each player's best time)
 async function loadAll(){
   const { data, error } = await supabase.rpc('get_all_boards', { p_limit: 1000 });   // effectively all
   const rows = error ? [] : (data || []);
-  const byMode = new Map();
+  const byType = new Map();   // type -> Map(username -> best row across voicings)
   for(const r of rows){
-    // only boards you can still create: one chord type × one voicing (incl. "any voicing" = |free); hide multi-type "+" / multi-voicing ","
-    if(r.mode.includes('+') || r.mode.includes(',')) continue;
-    if(r.mode.startsWith('diatonic')) continue;   // diatonic key-boards not on the public wall yet
-    if(!byMode.has(r.mode)) byMode.set(r.mode, []);
-    byMode.get(r.mode).push(r);
+    if(r.mode.includes('+') || r.mode.includes(',')) continue;        // legacy multi-type / multi-voicing runs
+    if(r.mode.startsWith('diatonic') || r.mode.startsWith('voiceleading')) continue;   // their own surfaces
+    const type = r.mode.split('|')[0];                                 // "major" / "major|1" / "major|free" → "major"
+    if(!byType.has(type)) byType.set(type, new Map());
+    const board = byType.get(type), prev = board.get(r.username);
+    if(!prev || r.time_ms < prev.time_ms) board.set(r.username, r);    // keep each player's best across voicings
   }
-  if(!byMode.size){ $('lbGrid').innerHTML = '<div class="lb-loading">No times yet — be the first!</div>'; return; }
-  const modes = [...byMode.keys()].sort((a, b) => {         // busiest boards first, then fastest #1
-    const A = byMode.get(a), B = byMode.get(b);
-    return (B.length - A.length) || (A[0].time_ms - B[0].time_ms);
+  if(!byType.size){ $('lbGrid').innerHTML = '<div class="lb-loading">No times yet — be the first!</div>'; return; }
+  const types = [...byType.keys()].sort((a, b) => {                    // busiest boards first, then canonical order
+    const d = byType.get(b).size - byType.get(a).size;
+    return d || (TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
   });
-  $('lbGrid').innerHTML = modes.map(m => {
-    const rs = byMode.get(m).sort((x, y) => x.rank - y.rank);
-    const body = rs.map(r => {
-      const t = r.time_ms/1000, cc = r.chord_count || 12;
+  const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">time</span><span class="pc">/ch</span><span class="ac">acc</span><span class="dt">date</span></div>';
+  $('lbGrid').innerHTML = types.map(type => {
+    const players = [...byType.get(type).values()].sort((x, y) => x.time_ms - y.time_ms);
+    const body = players.map((r, i) => {
+      const rank = i + 1, t = r.time_ms/1000, cc = r.chord_count || 12;
       const acc = r.errors == null ? '—' : Math.round(cc/(cc+r.errors)*100)+'%';
       let date=''; try{ date=new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
-      return `<div class="lb-row${r.rank===1?' top1':''}"><span class="r">${r.rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${t.toFixed(2)}s</span><span class="pc">${(t/cc).toFixed(2)}/ch</span><span class="ac">${acc}</span><span class="dt">${date}</span></div>`;
+      return `<div class="lb-row${rank===1?' top1':''}"><span class="r">${rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${t.toFixed(2)}s</span><span class="pc">${(t/cc).toFixed(2)}/ch</span><span class="ac">${acc}</span><span class="dt">${date}</span></div>`;
     }).join('');
-    const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">time</span><span class="pc">/ch</span><span class="ac">acc</span><span class="dt">date</span></div>';
-    return `<div class="lb-card"><div class="lb-card-title">${labelForMode(m)}</div>${head}${body}</div>`;
+    return `<div class="lb-card"><div class="lb-card-title">${TYPE_LABEL[type] || type}</div>${head}${body}</div>`;
   }).join('');
 }
 
@@ -157,15 +151,28 @@ async function loadVL(){
   const { data, error } = await supabase.rpc('get_vl_leaderboard', { p_limit: 1000 });
   const rows = error ? [] : (data || []);
   if(error) console.error('get_vl_leaderboard', error);
-  if(!rows.length){ $('vlBoard').innerHTML = '<div class="lb-loading">No voice-leading runs yet — be the first!</div>'; return; }
+  // group per key ("voiceleading|C" → "C"); rows arrive already ranked (score asc, time asc) within each key
+  const byKey = new Map();
+  for(const r of rows){
+    const key = (r.mode || '').split('|')[1] || '?';
+    if(!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(r);
+  }
+  if(!byKey.size){ $('vlBoard').innerHTML = '<div class="lb-loading">No voice-leading runs yet — be the first!</div>'; return; }
+  const keys = [...byKey.keys()].sort((a, b) => {   // busiest key-boards first, then smoothest #1
+    const A = byKey.get(a), B = byKey.get(b);
+    return (B.length - A.length) || (A[0].score - B[0].score);
+  });
   const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">over</span><span class="pc">time</span><span class="dt">date</span></div>';
-  const body = rows.map((r, i) => {
-    const rank = i + 1, over = r.score === 0 ? '0' : '+' + r.score;
-    const t = (r.time_ms/1000).toFixed(2) + 's';
-    let date=''; try{ date = new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
-    return `<div class="lb-row${rank===1?' top1':''}"><span class="r">${rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${over}</span><span class="pc">${t}</span><span class="dt">${date}</span></div>`;
+  $('vlBoard').innerHTML = keys.map(k => {
+    const body = byKey.get(k).map((r, i) => {
+      const rank = i + 1, over = r.score === 0 ? '0' : '+' + r.score;
+      const t = (r.time_ms/1000).toFixed(2) + 's';
+      let date=''; try{ date = new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
+      return `<div class="lb-row${rank===1?' top1':''}"><span class="r">${rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${over}</span><span class="pc">${t}</span><span class="dt">${date}</span></div>`;
+    }).join('');
+    return `<div class="lb-card"><div class="lb-card-title">key of ${escapeHtml(k)}</div>${head}${body}</div>`;
   }).join('');
-  $('vlBoard').innerHTML = `<div class="lb-card lb-vl">${head}${body}</div>`;
 }
 let vlLoaded = false;
 document.querySelectorAll('#lbTabs .mode-opt').forEach(b => b.onclick = () => {
