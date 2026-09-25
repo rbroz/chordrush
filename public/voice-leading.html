@@ -170,6 +170,7 @@ const DIATONIC = [
 ];
 const keyName = pc => ROOTS.find(r => r.pc === ((pc%12)+12)%12).name;
 let vlKey = 0;   // pitch class of the chosen key (default C)
+let vlSession = null;   // set on load; when present, completed runs are logged for the leaderboard
 function chordFor(r, type, inv){
   const T = CHORD_TYPES[type];
   const pcs = T.ivals.map(i => (r.pc + i) % 12);
@@ -333,6 +334,14 @@ function finish(){
   const opt = optimalRoute(progression);
   const best = Math.min(opt.distance, yours);   // guard: never show "you beat the best"
   const pct = Math.round((yours - best) / best * 100);   // how far above the smoothest route
+  // log the run for the leaderboard (smoothness = semitones over optimal; ranked over then time)
+  if(vlSession){
+    supabase.from('scores').insert({
+      user_id: vlSession.user.id, mode: 'voiceleading',
+      time_ms: Math.round(secs * 1000), chord_count: progression.length,
+      score: yours - opt.distance, played_at: new Date().toISOString(),
+    }).then(({ error }) => { if(error) console.error('vl save', error); });
+  }
   $('vlTime').textContent = secs.toFixed(2) + 's';
   $('vlDist').innerHTML = (pct === 0 ? 'optimal ✓' : '+' + pct + '%')
     + ' <span class="vl-sub">' + yours + ' semis · best ' + best + '</span>';
@@ -479,6 +488,7 @@ updateSoundBtn();
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
+  vlSession = session;
   renderNav(session);
   newRound();
   initMidi();

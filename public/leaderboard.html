@@ -41,6 +41,9 @@
   table.lb td.time { color: var(--text); font-weight: 600; }
   table.lb tr.top1 td.rank, table.lb tr.top1 td.time { color: var(--accent); }
   .lb-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0; }
+  .mode-row { margin-top: 4vh; }
+  .lb-wrap { margin-top: 2vh; }
+  .lb-vl { max-width: 520px; margin: 0 auto; }
 </style>
 </head>
 <body>
@@ -68,9 +71,19 @@
   </header>
 
   <main class="main">
-    <div class="lb-wrap">
+    <div class="mode-row">
+      <div class="mode-switch" id="lbTabs">
+        <button class="mode-opt active" data-tab="chords">chords</button>
+        <button class="mode-opt" data-tab="voice">voice leading</button>
+      </div>
+    </div>
+    <div class="lb-wrap" id="lbChords">
       <div class="lb-heading">every board · best time per player</div>
       <div class="lb-grid" id="lbGrid"><div class="lb-loading">loading boards…</div></div>
+    </div>
+    <div class="lb-wrap" id="lbVoice" hidden>
+      <div class="lb-heading">voice leading · smoothest run per player (ties broken by time)</div>
+      <div id="vlBoard"><div class="lb-loading">loading…</div></div>
     </div>
   </main>
 
@@ -138,6 +151,30 @@ async function loadAll(){
     return `<div class="lb-card"><div class="lb-card-title">${labelForMode(m)}</div>${head}${body}</div>`;
   }).join('');
 }
+
+// ---------- voice-leading board (smoothest run per player: fewest wasted semitones, then time) ----------
+async function loadVL(){
+  const { data, error } = await supabase.rpc('get_vl_leaderboard', { p_limit: 1000 });
+  const rows = error ? [] : (data || []);
+  if(error) console.error('get_vl_leaderboard', error);
+  if(!rows.length){ $('vlBoard').innerHTML = '<div class="lb-loading">No voice-leading runs yet — be the first!</div>'; return; }
+  const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">over</span><span class="pc">time</span><span class="dt">date</span></div>';
+  const body = rows.map((r, i) => {
+    const rank = i + 1, over = r.score === 0 ? '0' : '+' + r.score;
+    const t = (r.time_ms/1000).toFixed(2) + 's';
+    let date=''; try{ date = new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
+    return `<div class="lb-row${rank===1?' top1':''}"><span class="r">${rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${over}</span><span class="pc">${t}</span><span class="dt">${date}</span></div>`;
+  }).join('');
+  $('vlBoard').innerHTML = `<div class="lb-card lb-vl">${head}${body}</div>`;
+}
+let vlLoaded = false;
+document.querySelectorAll('#lbTabs .mode-opt').forEach(b => b.onclick = () => {
+  const tab = b.dataset.tab;
+  document.querySelectorAll('#lbTabs .mode-opt').forEach(x => x.classList.toggle('active', x === b));
+  $('lbChords').hidden = tab !== 'chords';
+  $('lbVoice').hidden  = tab !== 'voice';
+  if(tab === 'voice' && !vlLoaded){ vlLoaded = true; loadVL(); }
+});
 
 // ---------- nav account ----------
 function renderNav(session){
