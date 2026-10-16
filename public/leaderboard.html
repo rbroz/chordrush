@@ -73,12 +73,17 @@
     <div class="mode-row">
       <div class="mode-switch" id="lbTabs">
         <button class="mode-opt active" data-tab="chords">chords</button>
+        <button class="mode-opt" data-tab="diatonic">diatonic</button>
         <button class="mode-opt" data-tab="voice">voice leading</button>
       </div>
     </div>
     <div class="lb-wrap" id="lbChords">
       <div class="lb-heading">one board per chord type · best time per player · any voicing</div>
       <div class="lb-grid" id="lbGrid"><div class="lb-loading">loading boards…</div></div>
+    </div>
+    <div class="lb-wrap" id="lbDiatonic" hidden>
+      <div class="lb-heading">fastest time per player · one board per key</div>
+      <div class="lb-grid" id="diaBoard"><div class="lb-loading">loading…</div></div>
     </div>
     <div class="lb-wrap" id="lbVoice" hidden>
       <div class="lb-heading">smoothest run per player (ties broken by time)</div>
@@ -115,10 +120,14 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt
 const TYPE_LABEL = { major:'majors', minor:'minors', dim:'dim', aug:'aug', sus2:'sus2', sus4:'sus4', maj7:'maj7', min7:'min7', dom7:'dom7' };
 const TYPE_ORDER = Object.keys(TYPE_LABEL);
 
-// get_all_boards returns best time per player per mode; pool a type's voicings into one board (each player's best time)
+// get_all_boards returns best time per player per mode; fetched once and shared by the chords + diatonic tabs
+let boardsPromise = null;
+const fetchBoards = () => boardsPromise || (boardsPromise =
+  supabase.rpc('get_all_boards', { p_limit: 1000 }).then(({ data, error }) => error ? [] : (data || [])));   // effectively all
+
+// pool a type's voicings into one board (each player's best time)
 async function loadAll(){
-  const { data, error } = await supabase.rpc('get_all_boards', { p_limit: 1000 });   // effectively all
-  const rows = error ? [] : (data || []);
+  const rows = await fetchBoards();
   const byType = new Map();   // type -> Map(username -> best row across voicings)
   for(const r of rows){
     if(r.mode.includes('+') || r.mode.includes(',')) continue;        // legacy multi-type / multi-voicing runs
@@ -174,13 +183,43 @@ async function loadVL(){
     return `<div class="lb-card"><div class="lb-card-title">key of ${escapeHtml(k)}</div>${head}${body}</div>`;
   }).join('');
 }
-let vlLoaded = false;
+
+// ---------- diatonic boards (one per key: fastest time per player; accuracy shown, not ranked) ----------
+async function loadDiatonic(){
+  const rows = (await fetchBoards()).filter(r => r.mode.startsWith('diatonic|'));
+  const byKey = new Map();   // "diatonic|C" -> rows for the key of C
+  for(const r of rows){
+    const key = r.mode.split('|')[1] || '?';
+    if(!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(r);
+  }
+  if(!byKey.size){ $('diaBoard').innerHTML = '<div class="lb-loading">No diatonic runs yet — be the first!</div>'; return; }
+  for(const rs of byKey.values()) rs.sort((x, y) => x.time_ms - y.time_ms);   // already best-per-player; order by time
+  const keys = [...byKey.keys()].sort((a, b) => {   // busiest key-boards first, then fastest #1
+    const A = byKey.get(a), B = byKey.get(b);
+    return (B.length - A.length) || (A[0].time_ms - B[0].time_ms);
+  });
+  const head = '<div class="lb-row lb-head"><span class="r">#</span><span class="w">player</span><span class="t">time</span><span class="pc">/ch</span><span class="ac">acc</span><span class="dt">date</span></div>';
+  $('diaBoard').innerHTML = keys.map(k => {
+    const body = byKey.get(k).map((r, i) => {
+      const rank = i + 1, t = r.time_ms/1000, cc = r.chord_count || 7;
+      const acc = r.errors == null ? '—' : Math.round(cc/(cc+r.errors)*100)+'%';
+      let date=''; try{ date = new Date(r.played_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }catch(e){}
+      return `<div class="lb-row${rank===1?' top1':''}"><span class="r">${rank}</span><span class="w">${escapeHtml(r.username || 'player')}</span><span class="t">${t.toFixed(2)}s</span><span class="pc">${(t/cc).toFixed(2)}/ch</span><span class="ac">${acc}</span><span class="dt">${date}</span></div>`;
+    }).join('');
+    return `<div class="lb-card"><div class="lb-card-title">key of ${escapeHtml(k)}</div>${head}${body}</div>`;
+  }).join('');
+}
+
+// tabs: chords loads on page open; diatonic + voice leading load lazily on first visit
+const TABS = { chords:'lbChords', diatonic:'lbDiatonic', voice:'lbVoice' };
+const tabLoaded = { chords:true, diatonic:false, voice:false };
+const tabLoader = { diatonic:loadDiatonic, voice:loadVL };
 document.querySelectorAll('#lbTabs .mode-opt').forEach(b => b.onclick = () => {
   const tab = b.dataset.tab;
   document.querySelectorAll('#lbTabs .mode-opt').forEach(x => x.classList.toggle('active', x === b));
-  $('lbChords').hidden = tab !== 'chords';
-  $('lbVoice').hidden  = tab !== 'voice';
-  if(tab === 'voice' && !vlLoaded){ vlLoaded = true; loadVL(); }
+  for(const t in TABS) $(TABS[t]).hidden = t !== tab;
+  if(!tabLoaded[tab]){ tabLoaded[tab] = true; tabLoader[tab](); }
 });
 
 // ---------- nav account ----------
