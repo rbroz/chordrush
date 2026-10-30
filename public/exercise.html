@@ -121,7 +121,8 @@ let userSession = null;
 const setStatus = t => { $('exStatus').textContent = t || ''; };
 
 async function loadExercise(){
-  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).maybeSingle();
+  // owner filter: someone else's public exercise is readable but is not yours to edit
+  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
   if(error || !data){ if(error) console.error('load exercise', error); setStatus("Couldn't find that exercise."); return false; }
   $('exTitle').value = data.title;
   $('delBtn').hidden = false;
@@ -131,8 +132,9 @@ async function saveExercise(){
   const title = $('exTitle').value.trim() || 'Untitled exercise';
   $('saveBtn').disabled = true; setStatus('Saving…');
   if(exId){
-    const { error } = await supabase.from('exercises').update({ title }).eq('id', exId);
+    const { data, error } = await supabase.from('exercises').update({ title }).eq('id', exId).select('id');
     if(error){ console.error('update exercise', error); setStatus("Couldn't save. Try again."); }
+    else if(!data || !data.length) setStatus('This exercise no longer exists. Go back to Create.');   // deleted in another tab
     else setStatus('Saved');
   } else {
     const { data, error } = await supabase.from('exercises').insert({ user_id: userSession.user.id, title }).select('id').single();

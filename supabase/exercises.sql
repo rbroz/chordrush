@@ -14,15 +14,21 @@ create table if not exists public.exercises (
 
 create index if not exists exercises_user_idx on public.exercises (user_id, created_at);
 
--- Row-level security: each person can only see and change their own exercises.
+-- Visibility: private by default. Public exercises are readable by everyone (see the read-public policy below).
+alter table public.exercises add column if not exists is_public boolean not null default false;
+
+-- Row-level security: each person can see and change only their own exercises.
+-- The one exception: anyone can READ exercises their owner has marked public. Only owners can change or delete.
 alter table public.exercises enable row level security;
 
-drop policy if exists "exercises: read own"   on public.exercises;
-drop policy if exists "exercises: insert own" on public.exercises;
-drop policy if exists "exercises: update own" on public.exercises;
-drop policy if exists "exercises: delete own" on public.exercises;
+drop policy if exists "exercises: read own"    on public.exercises;
+drop policy if exists "exercises: read public" on public.exercises;
+drop policy if exists "exercises: insert own"  on public.exercises;
+drop policy if exists "exercises: update own"  on public.exercises;
+drop policy if exists "exercises: delete own"  on public.exercises;
 
-create policy "exercises: read own"   on public.exercises for select using (auth.uid() = user_id);
+create policy "exercises: read own"    on public.exercises for select using (auth.uid() = user_id);
+create policy "exercises: read public" on public.exercises for select using (is_public);
 create policy "exercises: insert own" on public.exercises for insert with check (auth.uid() = user_id);
 create policy "exercises: update own" on public.exercises for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "exercises: delete own" on public.exercises for delete using (auth.uid() = user_id);

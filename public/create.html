@@ -27,9 +27,29 @@
   .ex-new .lbl { font-size: 14px; font-weight: 600; letter-spacing: .02em; text-align: center; }
   .ex-new.disabled { cursor: not-allowed; opacity: .6; }
   .ex-new.disabled:hover { border-color: var(--line); color: var(--muted); }
-  .ex-card { display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid var(--line); background: var(--bg);
-             text-decoration: none; transition: border-color .12s; }
+  .ex-card { position: relative; padding: 0; border: 1px solid var(--line); background: var(--bg); transition: border-color .12s; }
   .ex-card:hover { border-color: var(--accent); }
+  /* the whole tile is one link (opens the editor); the three-dots button sits above it */
+  .ex-link { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 16px;
+             border-radius: 14px; text-decoration: none; }
+  .ex-menu-btn { position: absolute; top: 10px; right: 10px; z-index: 2; width: 30px; height: 30px; display: flex; align-items: center;
+                 justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+  .ex-menu-btn:hover, .ex-menu-btn[aria-expanded="true"] { background: var(--panel); color: var(--text); }
+  .ex-menu { position: absolute; top: 44px; right: 10px; z-index: 3; min-width: 130px; padding: 4px; background: var(--bg);
+             border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+  .ex-menu[hidden] { display: none; }   /* the hidden attribute needs help winning over other display rules on this site */
+  .ex-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; text-align: left;
+                    font-family: var(--mono); font-size: 13px; color: var(--text); cursor: pointer; }
+  .ex-menu button:hover { background: var(--panel); color: #d64545; }   /* hover-red is for Delete only; the toggle below overrides it */
+  .ex-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+  .ex-menu .ex-toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .ex-menu .ex-toggle:hover { color: var(--text); }
+  .ex-sw { position: relative; flex: none; width: 28px; height: 16px; border-radius: 999px; background: var(--line); transition: background .12s; }
+  .ex-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff;
+                  box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .12s; }
+  .ex-toggle[aria-checked="true"] .ex-sw { background: var(--accent); }
+  .ex-toggle[aria-checked="true"] .ex-sw::after { transform: translateX(12px); }
+  .ex-card .ex-meta.is-public { color: var(--accent); }
   .ex-card .ex-title { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
   .ex-card .ex-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
   .create-note { margin: 16px 0 0; font-size: 13px; color: var(--muted); min-height: 18px; }
@@ -120,7 +140,9 @@ let userSession = null, exercises = [], loadFailed = false;
 
 async function loadExercises(){
   if(!userSession){ exercises = []; loadFailed = false; return; }
-  const { data, error } = await supabase.from('exercises').select('id, title').order('created_at', { ascending: true });
+  // .eq('user_id', …) matters: other people's PUBLIC exercises are also readable, and must not show up in (or count against) your grid
+  const { data, error } = await supabase.from('exercises').select('id, title, is_public')
+    .eq('user_id', userSession.user.id).order('created_at', { ascending: true });
   if(error) console.error('load exercises', error);
   loadFailed = !!error;
   exercises = error ? [] : (data || []);
@@ -131,14 +153,74 @@ function renderGrid(){
   if(!userSession)  first = '<a class="ex-tile ex-new" href="/?login=1"><span class="plus">+</span><span class="lbl">Log in to create</span></a>';
   else if(full)     first = '<div class="ex-tile ex-new disabled" aria-disabled="true"><span class="plus">+</span><span class="lbl">Limit reached</span></div>';
   else              first = '<a class="ex-tile ex-new" href="/exercise" target="_blank" rel="noopener" aria-label="New exercise"><span class="plus">+</span><span class="lbl">New</span></a>';
-  $('exGrid').innerHTML = first + exercises.map(e =>
-    '<a class="ex-tile ex-card" href="/exercise?id=' + encodeURIComponent(e.id) + '" target="_blank" rel="noopener">'
-    + '<div class="ex-title">' + escapeHtml(e.title) + '</div><div class="ex-meta">draft</div></a>').join('');
+  $('exGrid').innerHTML = first + exercises.map(tileHtml).join('');
   $('exCount').textContent = userSession ? exercises.length + ' / ' + MAX_EXERCISES : '';
   $('exNote').textContent = !userSession ? 'Log in to create and keep exercises.'
     : loadFailed ? "Couldn't load your exercises right now."
     : full ? "You've reached the limit of " + MAX_EXERCISES + " exercises. Open one and delete it to free a slot." : '';
 }
+/* one exercise tile: the whole tile links to the editor; a three-dots menu (Public switch + Delete) sits on top */
+const DOTS_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+const visLabel = e => e.is_public ? 'public' : 'private';
+function tileHtml(e){
+  const id = escapeHtml(e.id), title = escapeHtml(e.title);
+  return '<div class="ex-tile ex-card" data-id="' + id + '">'
+    + '<a class="ex-link" href="/exercise?id=' + encodeURIComponent(e.id) + '" target="_blank" rel="noopener">'
+    +   '<div class="ex-title">' + title + '</div><div class="ex-meta' + (e.is_public ? ' is-public' : '') + '">' + visLabel(e) + '</div></a>'
+    + '<button type="button" class="ex-menu-btn" aria-label="Options for ' + title + '" aria-haspopup="menu" aria-expanded="false">' + DOTS_SVG + '</button>'
+    + '<div class="ex-menu" role="menu" hidden>'
+    +   '<button type="button" class="ex-toggle" role="menuitemcheckbox" aria-checked="' + (e.is_public ? 'true' : 'false') + '" data-act="toggle"><span>Public</span><span class="ex-sw"></span></button>'
+    +   '<hr>'
+    +   '<button type="button" role="menuitem" data-act="delete">Delete</button>'
+    + '</div></div>';
+}
+
+function closeMenus(){
+  document.querySelectorAll('.ex-menu').forEach(m => { m.hidden = true; });
+  document.querySelectorAll('.ex-menu-btn').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+$('exGrid').addEventListener('click', e => {
+  const dots = e.target.closest('.ex-menu-btn');
+  if(dots){                                           // open this tile's menu (closing any other); click again to close
+    const menu = dots.parentElement.querySelector('.ex-menu'), wasOpen = !menu.hidden;
+    closeMenus();
+    if(!wasOpen){ menu.hidden = false; dots.setAttribute('aria-expanded', 'true'); }
+    return;
+  }
+  const item = e.target.closest('[data-act]');
+  if(!item) return;
+  const id = item.closest('.ex-card').dataset.id;
+  if(item.dataset.act === 'toggle') togglePublic(id, item);
+  else if(item.dataset.act === 'delete') deleteExercise(id);
+});
+document.addEventListener('click', e => { if(!e.target.closest('.ex-menu-btn, .ex-menu')) closeMenus(); });   // click elsewhere closes
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenus(); });
+
+async function togglePublic(id, btn){
+  const ex = exercises.find(x => x.id === id); if(!ex) return;
+  const next = !ex.is_public;
+  btn.disabled = true;
+  const { data, error } = await supabase.from('exercises').update({ is_public: next }).eq('id', id).select('id');
+  btn.disabled = false;
+  if(error || !data || !data.length){                 // no row back = it was deleted elsewhere or isn't yours
+    if(error) console.error('toggle public', error);
+    $('exNote').textContent = "Couldn't change that exercise's visibility. Try again.";
+    return;
+  }
+  ex.is_public = next;                                // update in place so the menu stays open
+  btn.setAttribute('aria-checked', next ? 'true' : 'false');
+  const meta = btn.closest('.ex-card').querySelector('.ex-meta');
+  meta.textContent = visLabel(ex); meta.classList.toggle('is-public', next);
+  $('exNote').textContent = '';
+}
+async function deleteExercise(id){
+  const ex = exercises.find(x => x.id === id); closeMenus();
+  if(!ex || !confirm('Delete "' + ex.title + '"? This cannot be undone.')) return;
+  const { error } = await supabase.from('exercises').delete().eq('id', id);
+  if(error){ console.error('delete exercise', error); $('exNote').textContent = "Couldn't delete that exercise. Try again."; return; }
+  await refreshGrid();
+}
+
 async function refreshGrid(){ await loadExercises(); renderGrid(); }
 // editors open in their own tabs; when you switch back here, pick up anything created, renamed or deleted
 document.addEventListener('visibilitychange', () => { if(!document.hidden && userSession) refreshGrid(); });
