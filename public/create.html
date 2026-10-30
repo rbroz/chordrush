@@ -12,17 +12,22 @@
 
 <link rel="stylesheet" href="/style.css">
 <style>
-  .about { max-width: 640px; margin: 5vh auto 0; padding: 0 24px; text-align: left; }
-  .about h1 { font-size: 30px; font-weight: 700; color: var(--text); margin: 0 0 10px; }
-  .about .lede { font-size: 17px; color: var(--muted); line-height: 1.6; margin: 0 0 8px; }
-  .about h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 40px 0 12px; }
-  .about p { font-size: 16px; line-height: 1.75; color: var(--text); margin: 0 0 16px; }
-  .about a { color: var(--accent); text-decoration: none; }
-  .about a:hover { text-decoration: underline; }
-  .about ul { margin: 0; padding-left: 20px; }
-  .about li { font-size: 16px; line-height: 1.7; color: var(--text); margin: 7px 0; }
-  .about .req { border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; background: var(--panel); }
-  .about .cta { display: inline-block; margin-top: 8px; font-family: var(--mono); font-weight: 600; }
+  .create-wrap { width: 100%; max-width: 900px; margin: 5vh auto 0; padding: 0 24px; text-align: left; }
+  .create-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  .create-head h1 { font-size: 26px; font-weight: 700; color: var(--text); margin: 0; }
+  .create-head .count { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  /* 3 columns, rows added automatically as exercises are created — no limit */
+  .ex-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 150px; gap: 16px; }
+  .ex-tile { border-radius: 14px; padding: 16px; box-sizing: border-box; min-width: 0; }
+  .ex-new { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            background: var(--panel); border: 1px solid var(--line); color: var(--muted); cursor: pointer;
+            font-family: var(--mono); transition: border-color .12s, color .12s; }
+  .ex-new:hover { border-color: var(--muted); color: var(--text); }
+  .ex-new .plus { font-size: 36px; line-height: 1; font-weight: 300; }
+  .ex-new .lbl { font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .ex-card { display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid var(--line); background: var(--bg); }
+  .ex-card .ex-title { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+  .ex-card .ex-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -54,14 +59,13 @@
   </header>
 
   <main class="main">
-    <article class="about">
-      <h1>Create</h1>
-      <p class="lede">Build your own MIDI practice exercises.</p>
-
-      <h2>Work in progress</h2>
-      <p>This tab is a placeholder for now. I'm working out what making an exercise should feel like before I build it.</p>
-      <a class="cta" href="/">back to playing →</a>
-    </article>
+    <section class="create-wrap">
+      <div class="create-head">
+        <h1>Create</h1>
+        <span class="count" id="exCount"></span>
+      </div>
+      <div class="ex-grid" id="exGrid"></div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -102,6 +106,20 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
+/* ---------- exercise grid ---------- */
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// PREVIEW ONLY: drafts live in memory and vanish on refresh. Real exercises will come from the
+// database once the creation flow exists, and "+ New" will open that flow instead of adding a stub.
+const exercises = [];
+function renderGrid(){
+  $('exGrid').innerHTML =
+    '<button type="button" class="ex-tile ex-new" id="newBtn" aria-label="New exercise"><span class="plus">+</span><span class="lbl">New</span></button>'
+    + exercises.map(e => '<div class="ex-tile ex-card"><div class="ex-title">'+escapeHtml(e.title)+'</div><div class="ex-meta">draft</div></div>').join('');
+  $('newBtn').onclick = () => { exercises.push({ title: 'Untitled exercise ' + (exercises.length + 1) }); renderGrid(); };
+  $('exCount').textContent = exercises.length + (exercises.length === 1 ? ' exercise' : ' exercises');
+}
+renderGrid();
+
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
   renderNav(session);
