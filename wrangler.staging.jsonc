@@ -1,0 +1,19 @@
+{
+  // STAGING Worker: separate from production ("chordrush", which owns the chordrush.app domain).
+  // Deploy with: npx wrangler deploy -c wrangler.staging.jsonc
+  "name": "chordrush-staging",
+  "compatibility_date": "2026-07-18",
+
+  // Server-side code entry point.
+  "main": "src/index.js",
+
+  // Static site. `binding` lets the Worker serve these via env.ASSETS.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Public config (safe to commit). The SECRET key is NOT here —
+  // it's set separately: `.dev.vars` for local dev, `wrangler secret put` for prod.
+  "vars": {
+    "SUPABASE_URL": "https://pkrvnrgqtuvbtusdncok.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE"
+  }
+}
