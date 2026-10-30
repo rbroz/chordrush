@@ -49,7 +49,15 @@
                   box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .12s; }
   .ex-toggle[aria-checked="true"] .ex-sw { background: var(--accent); }
   .ex-toggle[aria-checked="true"] .ex-sw::after { transform: translateX(12px); }
-  .ex-card .ex-meta.is-public { color: var(--accent); }
+  .ex-card .ex-vis.is-public { color: var(--accent); }
+  /* examples: the four built-in tests, read-only; "Use as template" opens a copy in the editor */
+  .ex-section { margin: 40px 0 14px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .ex-example { display: flex; flex-direction: column; justify-content: space-between; border: 1px dashed var(--line);
+                background: var(--bg); text-decoration: none; transition: border-color .12s; }
+  .ex-example:hover { border-color: var(--accent); }
+  .ex-example .ex-title { font-size: 15px; font-weight: 700; color: var(--text); }
+  .ex-example .ex-blurb { margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .ex-example .ex-use { font-family: var(--mono); font-size: 12px; color: var(--accent); }
   .ex-card .ex-title { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
   .ex-card .ex-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
   .create-note { margin: 16px 0 0; font-size: 13px; color: var(--muted); min-height: 18px; }
@@ -91,6 +99,9 @@
       </div>
       <div class="ex-grid" id="exGrid"></div>
       <p class="create-note" id="exNote"></p>
+
+      <h2 class="ex-section">Examples</h2>
+      <div class="ex-grid" id="exExamples"></div>
     </section>
   </main>
 
@@ -111,6 +122,7 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { EXAMPLES, describeSpec } from '/exercise-spec.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
   'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
@@ -141,7 +153,7 @@ let userSession = null, exercises = [], loadFailed = false;
 async function loadExercises(){
   if(!userSession){ exercises = []; loadFailed = false; return; }
   // .eq('user_id', …) matters: other people's PUBLIC exercises are also readable, and must not show up in (or count against) your grid
-  const { data, error } = await supabase.from('exercises').select('id, title, is_public')
+  const { data, error } = await supabase.from('exercises').select('id, title, is_public, spec')
     .eq('user_id', userSession.user.id).order('created_at', { ascending: true });
   if(error) console.error('load exercises', error);
   loadFailed = !!error;
@@ -166,7 +178,8 @@ function tileHtml(e){
   const id = escapeHtml(e.id), title = escapeHtml(e.title);
   return '<div class="ex-tile ex-card" data-id="' + id + '">'
     + '<a class="ex-link" href="/exercise?id=' + encodeURIComponent(e.id) + '" target="_blank" rel="noopener">'
-    +   '<div class="ex-title">' + title + '</div><div class="ex-meta' + (e.is_public ? ' is-public' : '') + '">' + visLabel(e) + '</div></a>'
+    +   '<div class="ex-title">' + title + '</div>'
+    +   '<div class="ex-meta"><span class="ex-vis' + (e.is_public ? ' is-public' : '') + '">' + visLabel(e) + '</span> · ' + escapeHtml(describeSpec(e.spec)) + '</div></a>'
     + '<button type="button" class="ex-menu-btn" aria-label="Options for ' + title + '" aria-haspopup="menu" aria-expanded="false">' + DOTS_SVG + '</button>'
     + '<div class="ex-menu" role="menu" hidden>'
     +   '<button type="button" class="ex-toggle" role="menuitemcheckbox" aria-checked="' + (e.is_public ? 'true' : 'false') + '" data-act="toggle"><span>Public</span><span class="ex-sw"></span></button>'
@@ -209,8 +222,8 @@ async function togglePublic(id, btn){
   }
   ex.is_public = next;                                // update in place so the menu stays open
   btn.setAttribute('aria-checked', next ? 'true' : 'false');
-  const meta = btn.closest('.ex-card').querySelector('.ex-meta');
-  meta.textContent = visLabel(ex); meta.classList.toggle('is-public', next);
+  const vis = btn.closest('.ex-card').querySelector('.ex-vis');
+  vis.textContent = visLabel(ex); vis.classList.toggle('is-public', next);
   $('exNote').textContent = '';
 }
 async function deleteExercise(id){
@@ -220,6 +233,15 @@ async function deleteExercise(id){
   if(error){ console.error('delete exercise', error); $('exNote').textContent = "Couldn't delete that exercise. Try again."; return; }
   await refreshGrid();
 }
+
+// the four existing ChordRush tests, written in the new format; "Use as template" opens a copy in the editor
+function renderExamples(){
+  $('exExamples').innerHTML = EXAMPLES.map(x =>
+    '<a class="ex-tile ex-example" href="/exercise?template=' + encodeURIComponent(x.id) + '" target="_blank" rel="noopener">'
+    + '<div><div class="ex-title">' + escapeHtml(x.title) + '</div><div class="ex-blurb">' + escapeHtml(x.blurb) + '</div></div>'
+    + '<div class="ex-use">Use as template →</div></a>').join('');
+}
+renderExamples();
 
 async function refreshGrid(){ await loadExercises(); renderGrid(); }
 // editors open in their own tabs; when you switch back here, pick up anything created, renamed or deleted

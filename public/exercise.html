@@ -16,14 +16,25 @@
   .ex-edit [hidden] { display: none !important; }
   .ex-back { font-family: var(--mono); font-size: 13px; color: var(--muted); text-decoration: none; }
   .ex-back:hover { color: var(--text); }
-  .ex-title-input { display: block; width: 100%; box-sizing: border-box; margin: 18px 0 20px; padding: 10px 0; border: 0;
+  .ex-title-input { display: block; width: 100%; box-sizing: border-box; margin: 18px 0 24px; padding: 10px 0; border: 0;
                     border-bottom: 1px solid var(--line); background: transparent; color: var(--text);
                     font-size: 28px; font-weight: 700; outline: none; font-family: inherit; }
   .ex-title-input:focus { border-bottom-color: var(--accent); }
   .ex-title-input:disabled { color: var(--muted); }
-  .ex-edit-body { min-height: 240px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line);
-                  border-radius: 14px; background: var(--panel); color: var(--muted); font-family: var(--mono); font-size: 14px; }
-  .ex-edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+  /* the knob form: one row per knob, each a set of pills */
+  .ex-form { display: flex; flex-direction: column; gap: 22px; }
+  .ex-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .ex-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .ex-form .filterbar { flex-wrap: wrap; max-width: 100%; }
+  .ex-form .filter { padding: 7px 12px; font-size: 13px; }
+  .ex-form .ex-hint { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
+  .ex-form .ex-hint.active { border-color: var(--accent); }
+  .ex-form select { font-family: var(--mono); font-size: 13px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+                    background: var(--panel); color: var(--text); cursor: pointer; }
+  .ex-form .ex-link { border: 0; background: none; padding: 0; color: var(--accent); font-family: var(--mono); font-size: 12px; cursor: pointer; }
+  .ex-summary { font-family: var(--mono); font-size: 13px; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--line); width: 100%; }
+  .ex-problems { font-size: 13px; color: #d64545; }
+  .ex-edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 26px; }
   .ex-btn { font-family: var(--mono); font-size: 14px; padding: 10px 18px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
   .ex-btn:disabled { opacity: .5; cursor: not-allowed; }
   .ex-save { color: var(--accent); }
@@ -65,7 +76,7 @@
     <section class="ex-edit">
       <a class="ex-back" href="/create">← Create</a>
       <input id="exTitle" class="ex-title-input" type="text" maxlength="80" placeholder="Untitled exercise" aria-label="Exercise title" disabled>
-      <div class="ex-edit-body">The exercise builder goes here.</div>
+      <div class="ex-form" id="exForm"></div>
       <div class="ex-edit-actions">
         <button id="saveBtn" class="ex-btn ex-save" type="button" disabled>Save</button>
         <button id="delBtn" class="ex-btn ex-del" type="button" hidden>Delete</button>
@@ -91,6 +102,7 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ROOT_NAMES, CHORD_TYPES, TYPE_GROUPS, PROGRESSIONS, EXAMPLES, defaultSpec, poolFor, validateSpec, repairSpec, describeSpec, isBlankSpec } from '/exercise-spec.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
   'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
@@ -112,32 +124,101 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
-/* ---------- exercise editor (stub: title only; the builder itself comes later) ---------- */
+/* ---------- exercise editor: pick one option per knob; saved as a validated spec (data, never code) ---------- */
 // UI mirror of the limit. The database trigger (supabase/exercises.sql) is what actually enforces it.
 const MAX_EXERCISES = 5;
-let exId = new URLSearchParams(location.search).get('id');   // no id = a brand-new exercise (nothing saved yet)
+const params = new URLSearchParams(location.search);
+let exId = params.get('id');           // no id = a new exercise (nothing is saved until the first Save)
 let userSession = null;
-
+let spec = defaultSpec();
+let ready = false, busy = false;       // ready = signed in and (if editing) the exercise loaded
+const clone = x => JSON.parse(JSON.stringify(x));
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const setStatus = t => { $('exStatus').textContent = t || ''; };
 
+/* ----- the form ----- */
+const bar = (knob, opts, current) => '<div class="filterbar">' + opts.map(o =>
+  '<button type="button" class="filter' + (o.v === current ? ' active' : '') + '" data-knob="' + knob + '" data-v="' + escapeHtml(o.v) + '">' + escapeHtml(o.l) + '</button>').join('') + '</div>';
+const row = (label, inner) => '<div class="ex-row"><span class="fg-label">' + label + '</span>' + inner + '</div>';
+
+function renderForm(){
+  const p = spec.pool;
+  let html = row('What comes up', bar('pool-kind', [{v:'chords', l:'chords'}, {v:'diatonic', l:'diatonic'}, {v:'progression', l:'progression'}], p.kind));
+  if(p.kind === 'chords'){
+    const four = CHORD_TYPES[p.type].n === 4;
+    html += row('Chord type', '<select id="selType">' + TYPE_GROUPS.map(g => '<optgroup label="' + g.label + '">'
+              + g.types.map(t => '<option value="' + t + '"' + (t === p.type ? ' selected' : '') + '>' + CHORD_TYPES[t].label + '</option>').join('') + '</optgroup>').join('') + '</select>')
+          + row('Voicing', bar('voicing', [{v:'any', l:'any'}, {v:'root', l:'root'}, {v:'1st', l:'1st inv'}, {v:'2nd', l:'2nd inv'}].concat(four ? [{v:'3rd', l:'3rd inv'}] : []), p.voicing));
+  } else {
+    if(p.kind === 'progression'){
+      const id = Object.keys(PROGRESSIONS).find(k => PROGRESSIONS[k].steps.join() === p.steps.join()) || '';
+      html += row('Progression', '<select id="selProg">' + (id ? '' : '<option value="" selected>custom</option>')
+                + Object.keys(PROGRESSIONS).map(k => '<option value="' + k + '"' + (k === id ? ' selected' : '') + '>' + PROGRESSIONS[k].label + '</option>').join('') + '</select>');
+    }
+    html += row('Keys', '<div class="ex-sub"><div class="filterbar">' + ROOT_NAMES.map((n, pc) =>
+              '<button type="button" class="filter' + (p.keys.includes(pc) ? ' active' : '') + '" data-knob="key" data-v="' + pc + '">' + n + '</button>').join('')
+              + '</div><button type="button" class="ex-link" data-knob="keys-all">all keys</button></div>');
+  }
+  html += row('What you see', '<div class="ex-sub">'
+            + bar('show', [{v:'name', l:'chord name'}, {v:'numeral', l:'roman numeral'}, {v:'both', l:'both'}], spec.prompt.show)
+            + (spec.prompt.show === 'name' ? '<button type="button" class="filter ex-hint' + (spec.prompt.hint ? ' active' : '') + '" data-knob="hint">keyboard hint ' + (spec.prompt.hint ? 'on' : 'off') + '</button>' : '')
+            + '</div>');
+  html += row('What counts', bar('accept', [{v:'exact', l:'exact chord'}, {v:'triad_or_seventh', l:'triad or 7th'}], spec.accept));
+  html += row('How it’s scored', bar('scoring', [{v:'time', l:'time + accuracy'}, {v:'points', l:'points'}, {v:'smoothness', l:'smoothness'}], spec.scoring));
+  const problems = validateSpec(spec);
+  html += '<div class="ex-summary">' + escapeHtml(describeSpec(spec)) + '</div>'
+        + (problems.length ? '<div class="ex-problems">' + problems.map(escapeHtml).join('<br>') + '</div>' : '');
+  $('exForm').innerHTML = html;
+  syncButtons();
+}
+function syncButtons(){ $('saveBtn').disabled = busy || !ready || validateSpec(spec).length > 0; }
+
+// change ONE knob, then let repairSpec bend the others so the whole spec stays valid (your latest choice always wins)
+function change(knob, mutate){ const next = clone(spec); mutate(next); spec = repairSpec(next, knob); renderForm(); setStatus(''); }
+
+$('exForm').addEventListener('click', e => {
+  const b = e.target.closest('[data-knob]'); if(!b) return;
+  const k = b.dataset.knob, v = b.dataset.v;
+  if(k === 'pool-kind')      change('pool', s => { if(s.pool.kind !== v) s.pool = poolFor(v, s.pool); });
+  else if(k === 'voicing')   change('pool', s => { s.pool.voicing = v; });
+  else if(k === 'key')       change('pool', s => { const n = +v, i = s.pool.keys.indexOf(n); if(i >= 0){ if(s.pool.keys.length > 1) s.pool.keys.splice(i, 1); } else s.pool.keys.push(n); });
+  else if(k === 'keys-all')  change('pool', s => { s.pool.keys = ROOT_NAMES.map((n, i) => i); });
+  else if(k === 'show')      change('prompt', s => { s.prompt.show = v; });
+  else if(k === 'hint')      change('prompt', s => { s.prompt.hint = !s.prompt.hint; });
+  else if(k === 'accept')    change('accept', s => { s.accept = v; });
+  else if(k === 'scoring')   change('scoring', s => { s.scoring = v; });
+});
+$('exForm').addEventListener('change', e => {
+  if(e.target.id === 'selType') change('pool', s => { s.pool.type = e.target.value; });
+  else if(e.target.id === 'selProg' && e.target.value) change('pool', s => { s.pool.steps = PROGRESSIONS[e.target.value].steps.slice(); });
+});
+
+/* ----- load / save / delete ----- */
 async function loadExercise(){
   // owner filter: someone else's public exercise is readable but is not yours to edit
-  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
+  const { data, error } = await supabase.from('exercises').select('id, title, spec').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
   if(error || !data){ if(error) console.error('load exercise', error); setStatus("Couldn't find that exercise."); return false; }
   $('exTitle').value = data.title;
   $('delBtn').hidden = false;
+  if(isBlankSpec(data.spec) || validateSpec(data.spec).length){
+    spec = defaultSpec();
+    setStatus(isBlankSpec(data.spec) ? 'This exercise is blank. Pick your options, then Save.' : 'This exercise needed attention, so it was reset to the default options. Save to keep them.');
+  } else spec = clone(data.spec);
+  renderForm();
   return true;
 }
 async function saveExercise(){
   const title = $('exTitle').value.trim() || 'Untitled exercise';
-  $('saveBtn').disabled = true; setStatus('Saving…');
+  const problems = validateSpec(spec);
+  if(problems.length){ setStatus(problems[0]); return; }
+  busy = true; syncButtons(); setStatus('Saving…');
   if(exId){
-    const { data, error } = await supabase.from('exercises').update({ title }).eq('id', exId).select('id');
+    const { data, error } = await supabase.from('exercises').update({ title, spec }).eq('id', exId).select('id');
     if(error){ console.error('update exercise', error); setStatus("Couldn't save. Try again."); }
     else if(!data || !data.length) setStatus('This exercise no longer exists. Go back to Create.');   // deleted in another tab
     else setStatus('Saved');
   } else {
-    const { data, error } = await supabase.from('exercises').insert({ user_id: userSession.user.id, title }).select('id').single();
+    const { data, error } = await supabase.from('exercises').insert({ user_id: userSession.user.id, title, spec }).select('id').single();
     if(error){
       console.error('insert exercise', error);
       setStatus(String(error.message || '').includes('exercise limit reached')
@@ -150,7 +231,7 @@ async function saveExercise(){
       setStatus('Saved');
     }
   }
-  $('saveBtn').disabled = false;
+  busy = false; syncButtons();
 }
 async function deleteExercise(){
   if(!confirm("Delete this exercise? This can't be undone.")) return;
@@ -167,9 +248,15 @@ $('exTitle').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('save
   const { data:{ session } } = await supabase.auth.getSession();
   userSession = session;
   renderNav(session);
-  if(!session){ setStatus('Log in to create exercises.'); return; }
-  if(exId && !(await loadExercise())) return;   // an id that can't be loaded (not yours / deleted) stays read-only
-  $('exTitle').disabled = false; $('saveBtn').disabled = false;
+  if(!exId){                                           // a brand-new exercise, optionally copied from one of the examples
+    const tpl = EXAMPLES.find(x => x.id === params.get('template'));
+    if(tpl){ spec = clone(tpl.spec); $('exTitle').value = tpl.title; setStatus('Copy of the “' + tpl.title + '” example. Not saved yet.'); }
+  }
+  renderForm();                                        // anyone can try the controls; saving needs a login
+  if(!session){ setStatus('Log in to save exercises.'); return; }
+  if(exId && !(await loadExercise())) return;          // an id that can't be loaded (not yours / deleted) stays read-only
+  ready = true;
+  $('exTitle').disabled = false; syncButtons();
   if(!exId) $('exTitle').focus();
 })();
 </script>
