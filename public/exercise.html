@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Exercise — ChordRush</title>
+<meta name="description" content="Edit a ChordRush exercise.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://chordrush.app/exercise">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+<link rel="stylesheet" href="/style.css">
+<style>
+  .ex-edit { width: 100%; max-width: 760px; margin: 5vh auto 0; padding: 0 24px; text-align: left; }
+  .ex-edit [hidden] { display: none !important; }
+  .ex-back { font-family: var(--mono); font-size: 13px; color: var(--muted); text-decoration: none; }
+  .ex-back:hover { color: var(--text); }
+  .ex-title-input { display: block; width: 100%; box-sizing: border-box; margin: 18px 0 20px; padding: 10px 0; border: 0;
+                    border-bottom: 1px solid var(--line); background: transparent; color: var(--text);
+                    font-size: 28px; font-weight: 700; outline: none; font-family: inherit; }
+  .ex-title-input:focus { border-bottom-color: var(--accent); }
+  .ex-title-input:disabled { color: var(--muted); }
+  .ex-edit-body { min-height: 240px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line);
+                  border-radius: 14px; background: var(--panel); color: var(--muted); font-family: var(--mono); font-size: 14px; }
+  .ex-edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+  .ex-btn { font-family: var(--mono); font-size: 14px; padding: 10px 18px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .ex-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .ex-save { color: var(--accent); }
+  .ex-save:not(:disabled):hover { border-color: var(--accent); }
+  .ex-del { color: var(--muted); }
+  .ex-del:hover { color: #d64545; border-color: #d64545; }
+  .ex-status { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+  <header class="nav">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M9 8l4 4-4 4"/><path d="M15 8v8"/></svg>
+      <span><span class="accent">Chord</span>Rush</span>
+    </a>
+    <nav class="mode-nav">
+      <a class="mode-tab" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 14V10"/><path d="M9 2h6"/><path d="M12 2v2"/></svg>
+        <span>Test</span>
+      </a>
+      <a class="mode-tab" href="/practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v9"/><path d="M15 5v9"/></svg>
+        <span>Practice</span>
+      </a>
+      <a class="mode-tab" href="/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M8 20v-6"/><path d="M12 20v-10"/><path d="M16 20v-4"/></svg>
+        <span>Leaderboard</span>
+      </a>
+      <a class="mode-tab active" href="/create" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        <span>Create</span>
+      </a>
+    </nav>
+    <div class="nav-account" id="navAccount"></div>
+  </header>
+
+  <main class="main">
+    <section class="ex-edit">
+      <a class="ex-back" href="/create">← Create</a>
+      <input id="exTitle" class="ex-title-input" type="text" maxlength="80" placeholder="Untitled exercise" aria-label="Exercise title" disabled>
+      <div class="ex-edit-body">The exercise builder goes here.</div>
+      <div class="ex-edit-actions">
+        <button id="saveBtn" class="ex-btn ex-save" type="button" disabled>Save</button>
+        <button id="delBtn" class="ex-btn ex-del" type="button" hidden>Delete</button>
+        <span id="exStatus" class="ex-status"></span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a href="/about" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      about
+    </a>
+    <a href="https://discord.gg/SCjKGuJjCp" target="_blank" rel="noopener" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+      discord
+    </a>
+    <a href="https://github.com/rbroz/chordrush" target="_blank" rel="noopener" class="footer-link">
+      <svg class="footer-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.014 2.898-.014 3.293 0 .322.216.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      github
+    </a>
+  </footer>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supabase = createClient(
+  'https://pkrvnrgqtuvbtusdncok.supabase.co',
+  'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
+);
+const $ = id => document.getElementById(id);
+function renderNav(session){
+  const nav = $('navAccount');
+  if(session){
+    const name = session.user.user_metadata?.username || 'account';
+    nav.innerHTML = `<div class="user-menu">
+        <button class="nav-user" type="button">@${name} <span class="caret">▾</span></button>
+        <div class="user-dropdown">
+          <a href="/dashboard">My Dashboard</a>
+          <button class="dd-logout" id="logoutBtn">log out</button>
+        </div>
+      </div>`;
+    $('logoutBtn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+  } else {
+    nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
+  }
+}
+/* ---------- exercise editor (stub: title only; the builder itself comes later) ---------- */
+// UI mirror of the limit. The database trigger (supabase/exercises.sql) is what actually enforces it.
+const MAX_EXERCISES = 5;
+let exId = new URLSearchParams(location.search).get('id');   // no id = a brand-new exercise (nothing saved yet)
+let userSession = null;
+
+const setStatus = t => { $('exStatus').textContent = t || ''; };
+
+async function loadExercise(){
+  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).maybeSingle();
+  if(error || !data){ if(error) console.error('load exercise', error); setStatus("Couldn't find that exercise."); return false; }
+  $('exTitle').value = data.title;
+  $('delBtn').hidden = false;
+  return true;
+}
+async function saveExercise(){
+  const title = $('exTitle').value.trim() || 'Untitled exercise';
+  $('saveBtn').disabled = true; setStatus('Saving…');
+  if(exId){
+    const { error } = await supabase.from('exercises').update({ title }).eq('id', exId);
+    if(error){ console.error('update exercise', error); setStatus("Couldn't save. Try again."); }
+    else setStatus('Saved');
+  } else {
+    const { data, error } = await supabase.from('exercises').insert({ user_id: userSession.user.id, title }).select('id').single();
+    if(error){
+      console.error('insert exercise', error);
+      setStatus(String(error.message || '').includes('exercise limit reached')
+        ? "You've reached the limit of " + MAX_EXERCISES + " exercises. Delete one from the Create page to free a slot."
+        : "Couldn't save. Try again.");
+    } else {
+      exId = data.id;
+      history.replaceState(null, '', '/exercise?id=' + encodeURIComponent(exId));   // this tab now points at the saved exercise
+      $('delBtn').hidden = false;
+      setStatus('Saved');
+    }
+  }
+  $('saveBtn').disabled = false;
+}
+async function deleteExercise(){
+  if(!confirm("Delete this exercise? This can't be undone.")) return;
+  const { error } = await supabase.from('exercises').delete().eq('id', exId);
+  if(error){ console.error('delete exercise', error); setStatus("Couldn't delete. Try again."); return; }
+  location.href = '/create';
+}
+
+$('saveBtn').onclick = saveExercise;
+$('delBtn').onclick = deleteExercise;
+$('exTitle').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('saveBtn').disabled) saveExercise(); });
+
+(async () => {
+  const { data:{ session } } = await supabase.auth.getSession();
+  userSession = session;
+  renderNav(session);
+  if(!session){ setStatus('Log in to create exercises.'); return; }
+  if(exId && !(await loadExercise())) return;   // an id that can't be loaded (not yours / deleted) stays read-only
+  $('exTitle').disabled = false; $('saveBtn').disabled = false;
+  if(!exId) $('exTitle').focus();
+})();
+</script>
+</body>
+</html>

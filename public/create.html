@@ -21,13 +21,18 @@
   .ex-tile { border-radius: 14px; padding: 16px; box-sizing: border-box; min-width: 0; }
   .ex-new { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
             background: var(--panel); border: 1px solid var(--line); color: var(--muted); cursor: pointer;
-            font-family: var(--mono); transition: border-color .12s, color .12s; }
+            font-family: var(--mono); text-decoration: none; transition: border-color .12s, color .12s; }
   .ex-new:hover { border-color: var(--muted); color: var(--text); }
   .ex-new .plus { font-size: 36px; line-height: 1; font-weight: 300; }
-  .ex-new .lbl { font-size: 14px; font-weight: 600; letter-spacing: .02em; }
-  .ex-card { display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid var(--line); background: var(--bg); }
+  .ex-new .lbl { font-size: 14px; font-weight: 600; letter-spacing: .02em; text-align: center; }
+  .ex-new.disabled { cursor: not-allowed; opacity: .6; }
+  .ex-new.disabled:hover { border-color: var(--line); color: var(--muted); }
+  .ex-card { display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid var(--line); background: var(--bg);
+             text-decoration: none; transition: border-color .12s; }
+  .ex-card:hover { border-color: var(--accent); }
   .ex-card .ex-title { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
   .ex-card .ex-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .create-note { margin: 16px 0 0; font-size: 13px; color: var(--muted); min-height: 18px; }
 </style>
 </head>
 <body>
@@ -65,6 +70,7 @@
         <span class="count" id="exCount"></span>
       </div>
       <div class="ex-grid" id="exGrid"></div>
+      <p class="create-note" id="exNote"></p>
     </section>
   </main>
 
@@ -106,23 +112,42 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
-/* ---------- exercise grid ---------- */
+/* ---------- exercise grid: your exercises, loaded from the database ---------- */
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// PREVIEW ONLY: drafts live in memory and vanish on refresh. Real exercises will come from the
-// database once the creation flow exists, and "+ New" will open that flow instead of adding a stub.
-const exercises = [];
-function renderGrid(){
-  $('exGrid').innerHTML =
-    '<button type="button" class="ex-tile ex-new" id="newBtn" aria-label="New exercise"><span class="plus">+</span><span class="lbl">New</span></button>'
-    + exercises.map(e => '<div class="ex-tile ex-card"><div class="ex-title">'+escapeHtml(e.title)+'</div><div class="ex-meta">draft</div></div>').join('');
-  $('newBtn').onclick = () => { exercises.push({ title: 'Untitled exercise ' + (exercises.length + 1) }); renderGrid(); };
-  $('exCount').textContent = exercises.length + (exercises.length === 1 ? ' exercise' : ' exercises');
+// UI mirror of the limit. The database trigger (supabase/exercises.sql) is what actually enforces it.
+const MAX_EXERCISES = 5;
+let userSession = null, exercises = [], loadFailed = false;
+
+async function loadExercises(){
+  if(!userSession){ exercises = []; loadFailed = false; return; }
+  const { data, error } = await supabase.from('exercises').select('id, title').order('created_at', { ascending: true });
+  if(error) console.error('load exercises', error);
+  loadFailed = !!error;
+  exercises = error ? [] : (data || []);
 }
-renderGrid();
+function renderGrid(){
+  const full = exercises.length >= MAX_EXERCISES;
+  let first;   // the grey "+ New" block, always the first tile
+  if(!userSession)  first = '<a class="ex-tile ex-new" href="/?login=1"><span class="plus">+</span><span class="lbl">Log in to create</span></a>';
+  else if(full)     first = '<div class="ex-tile ex-new disabled" aria-disabled="true"><span class="plus">+</span><span class="lbl">Limit reached</span></div>';
+  else              first = '<a class="ex-tile ex-new" href="/exercise" target="_blank" rel="noopener" aria-label="New exercise"><span class="plus">+</span><span class="lbl">New</span></a>';
+  $('exGrid').innerHTML = first + exercises.map(e =>
+    '<a class="ex-tile ex-card" href="/exercise?id=' + encodeURIComponent(e.id) + '" target="_blank" rel="noopener">'
+    + '<div class="ex-title">' + escapeHtml(e.title) + '</div><div class="ex-meta">draft</div></a>').join('');
+  $('exCount').textContent = userSession ? exercises.length + ' / ' + MAX_EXERCISES : '';
+  $('exNote').textContent = !userSession ? 'Log in to create and keep exercises.'
+    : loadFailed ? "Couldn't load your exercises right now."
+    : full ? "You've reached the limit of " + MAX_EXERCISES + " exercises. Open one and delete it to free a slot." : '';
+}
+async function refreshGrid(){ await loadExercises(); renderGrid(); }
+// editors open in their own tabs; when you switch back here, pick up anything created, renamed or deleted
+document.addEventListener('visibilitychange', () => { if(!document.hidden && userSession) refreshGrid(); });
 
 (async () => {
   const { data:{ session } } = await supabase.auth.getSession();
+  userSession = session;
   renderNav(session);
+  await refreshGrid();
 })();
 </script>
 </body>
