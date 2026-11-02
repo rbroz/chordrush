@@ -21,6 +21,17 @@
                     font-size: 28px; font-weight: 700; outline: none; font-family: inherit; }
   .ex-title-input:focus { border-bottom-color: var(--accent); }
   .ex-title-input:disabled { color: var(--muted); }
+  /* natural-language box: describe it, the options below get filled in */
+  .ex-ai { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 26px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .ex-ai-input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+                 color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.5; resize: vertical; outline: none; }
+  .ex-ai-input:focus { border-color: var(--accent); }
+  .ex-ai-input:disabled { opacity: .6; cursor: not-allowed; }
+  .ex-ai-row { display: flex; align-items: center; gap: 12px; }
+  .ex-ai-btn:not(:disabled) { color: var(--accent); }
+  .ex-ai-btn:not(:disabled):hover { border-color: var(--accent); }
+  .ex-ai-note { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 640px; }
+  .ex-ai-note.is-error { color: #d64545; }
   /* the knob form: one row per knob, each a set of pills */
   .ex-form { display: flex; flex-direction: column; gap: 22px; }
   .ex-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -76,6 +87,16 @@
     <section class="ex-edit">
       <a class="ex-back" href="/create">← Create</a>
       <input id="exTitle" class="ex-title-input" type="text" maxlength="80" placeholder="Untitled exercise" aria-label="Exercise title" disabled>
+      <div class="ex-ai">
+        <label class="fg-label" for="aiPrompt">Describe your exercise</label>
+        <textarea id="aiPrompt" class="ex-ai-input" rows="2" maxlength="400" disabled
+          placeholder="e.g. ii–V–I in every key, show me just the numerals, and give bonus points for playing the 7th"></textarea>
+        <div class="ex-ai-row">
+          <button id="aiBtn" class="ex-btn ex-ai-btn" type="button" disabled>Generate</button>
+          <span id="aiStatus" class="ex-status"></span>
+        </div>
+        <div id="aiNote" class="ex-ai-note" hidden></div>
+      </div>
       <div class="ex-form" id="exForm"></div>
       <div class="ex-edit-actions">
         <button id="saveBtn" class="ex-btn ex-save" type="button" disabled>Save</button>
@@ -135,6 +156,57 @@ let ready = false, busy = false;       // ready = signed in and (if editing) the
 const clone = x => JSON.parse(JSON.stringify(x));
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const setStatus = t => { $('exStatus').textContent = t || ''; };
+
+/* ----- natural-language generation: describe it, the options below get filled in ----- */
+const AI_PER_DAY = 5;   // mirrors LIMITS.perUserPerDay in src/generate-exercise.js (a label only; the server enforces the limit)
+let aiBusy = false, autoTitle = '';
+const leftLabel = n => Math.max(0, n) + (n === 1 ? ' generation' : ' generations') + ' left today';
+function setAiNote(text, isError){ const n = $('aiNote'); n.textContent = text || ''; n.hidden = !text; n.classList.toggle('is-error', !!isError); }
+function syncAi(){
+  $('aiPrompt').disabled = !userSession;
+  $('aiBtn').disabled = !userSession || aiBusy || !$('aiPrompt').value.trim();
+}
+async function showAiBudget(){   // "n left today", read from the one row the database lets you see
+  const day = new Date().toISOString().slice(0, 10);   // the server counts in UTC days
+  const { data, error } = await supabase.from('ai_usage').select('requests').eq('user_id', userSession.user.id).eq('day', day).maybeSingle();
+  if(error) return;   // usage table not set up yet: just don't show a count
+  $('aiStatus').textContent = leftLabel(AI_PER_DAY - ((data && data.requests) || 0));
+}
+async function generate(){
+  const prompt = $('aiPrompt').value.trim();
+  if(!prompt || aiBusy || !userSession) return;
+  aiBusy = true; syncAi(); setAiNote(''); $('aiStatus').textContent = 'Thinking…';
+  let left = '';
+  try {
+    const { data:{ session } } = await supabase.auth.getSession();   // a fresh token, since they expire
+    const resp = await fetch('/api/generate-exercise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session ? session.access_token : '') },
+      body: JSON.stringify({ prompt }),
+    });
+    let data = null; try { data = await resp.json(); } catch {}
+    if(!data) setAiNote("Couldn't reach the generator. You can still set the options by hand.", true);
+    else {
+      if(typeof data.remaining === 'number') left = leftLabel(data.remaining);
+      if(data.ok && !validateSpec(data.spec).length){          // the browser re-checks, even though the server already did
+        spec = clone(data.spec);
+        const cur = $('exTitle').value.trim();
+        if(data.title && (!cur || cur === 'Untitled exercise' || cur === autoTitle)){ $('exTitle').value = data.title; autoTitle = data.title; }   // never overwrite a title you typed
+        renderForm(); setStatus('');
+        setAiNote((data.note ? data.note + ' ' : '') + 'Check the options below, then Save.');
+      }
+      else if(data.ok) setAiNote("That didn't come out right. Try rephrasing, or set the options by hand.", true);
+      else if(data.unsupported) setAiNote(data.message || "That isn't something I can make yet.", false);
+      else setAiNote(data.error || "Couldn't generate that. Try again.", true);
+    }
+  } catch(e){ console.error('generate', e); setAiNote("Couldn't reach the generator. You can still set the options by hand.", true); }
+  $('aiStatus').textContent = left;
+  aiBusy = false; syncAi();
+}
+$('aiBtn').onclick = generate;
+$('aiPrompt').addEventListener('input', syncAi);
+$('aiPrompt').addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); generate(); } });
+
 
 /* ----- the form ----- */
 const bar = (knob, opts, current) => '<div class="filterbar">' + opts.map(o =>
@@ -250,13 +322,13 @@ $('exTitle').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('save
   renderNav(session);
   if(!exId){                                           // a brand-new exercise, optionally copied from one of the examples
     const tpl = EXAMPLES.find(x => x.id === params.get('template'));
-    if(tpl){ spec = clone(tpl.spec); $('exTitle').value = tpl.title; setStatus('Copy of the “' + tpl.title + '” example. Not saved yet.'); }
+    if(tpl){ spec = clone(tpl.spec); $('exTitle').value = tpl.title; autoTitle = tpl.title; setStatus('Copy of the “' + tpl.title + '” example. Not saved yet.'); }
   }
   renderForm();                                        // anyone can try the controls; saving needs a login
-  if(!session){ setStatus('Log in to save exercises.'); return; }
+  if(!session){ setStatus('Log in to save exercises.'); syncAi(); return; }
   if(exId && !(await loadExercise())) return;          // an id that can't be loaded (not yours / deleted) stays read-only
   ready = true;
-  $('exTitle').disabled = false; syncButtons();
+  $('exTitle').disabled = false; syncButtons(); syncAi(); showAiBudget();
   if(!exId) $('exTitle').focus();
 })();
 </script>

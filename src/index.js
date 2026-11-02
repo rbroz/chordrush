@@ -2,12 +2,19 @@
 // Serves the static site AND handles server-side API routes.
 // Static assets are served automatically; only non-asset routes reach this code.
 
+import { handleGenerate } from "./generate-exercise.js";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/login" && request.method === "POST") {
       return handleLogin(request, env);
+    }
+
+    // natural-language exercise creation (calls the model; needs a login and counts against daily limits)
+    if (url.pathname === "/api/generate-exercise") {
+      return handleGenerate(request, env);
     }
 
     // Google Search Console verification — served explicitly so the ".html" URL
