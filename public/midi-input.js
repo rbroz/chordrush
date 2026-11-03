@@ -1,12 +1,13 @@
 // ChordRush MIDI input for the exercise player: listen to EVERY connected MIDI keyboard and report each key strike.
 // (The main test page has its own copy with a device picker and sound; this one is the small version the editor needs.)
 //
-//   const midi = await connectMidi({ onNoteOn: key => ..., onStatus: text => ... });
+//   const midi = await connectMidi({ onNoteOn: (key, time) => ..., onNoteOff: (key, time) => ..., onStatus: text => ... });
+// `time` is when the keyboard sent the message, in milliseconds on the same clock as performance.now().
 //
 // The browser only asks for MIDI permission when connectMidi is called, so call it when the player is first shown.
-import { noteOnFrom } from './exercise-runner.js';
+import { noteOnFrom, noteOffFrom } from './exercise-runner.js';
 
-export async function connectMidi({ onNoteOn, onStatus }) {
+export async function connectMidi({ onNoteOn, onNoteOff, onStatus }) {
   const say = t => { if (onStatus) onStatus(t); };
   if (!navigator.requestMIDIAccess) { say('This browser has no MIDI support. Use Chrome or Edge on a computer.'); return null; }
   let access;
@@ -20,7 +21,13 @@ export async function connectMidi({ onNoteOn, onStatus }) {
         : 'Couldn’t start MIDI. Try reloading.');
     return null;
   }
-  const handle = ev => { const key = noteOnFrom(ev.data); if (key !== null) onNoteOn(key); };
+  const handle = ev => {
+    const time = ev.timeStamp || performance.now();
+    const on = noteOnFrom(ev.data);
+    if (on !== null) { if (onNoteOn) onNoteOn(on, time); return; }
+    const off = noteOffFrom(ev.data);
+    if (off !== null && onNoteOff) onNoteOff(off, time);
+  };
   function bind() {
     const inputs = [...access.inputs.values()];
     inputs.forEach(i => { i.onmidimessage = handle; });

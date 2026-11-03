@@ -13,10 +13,16 @@
 export const SPEC_VERSION = 1;
 export const ROOT_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];   // index = pitch class
 
-export const CHORD_TYPES = {   // n = number of notes
-  major: { label: 'majors', n: 3 }, minor: { label: 'minors', n: 3 }, dim:  { label: 'dim',  n: 3 },
-  aug:   { label: 'aug',    n: 3 }, sus2:  { label: 'sus2',   n: 3 }, sus4: { label: 'sus4', n: 3 },
-  maj7:  { label: 'maj7',   n: 4 }, min7:  { label: 'min7',   n: 4 }, dom7: { label: 'dom7', n: 4 },
+export const CHORD_TYPES = {   // n = number of notes; ivals = semitones above the root; suffix/sym = how the chord name is written
+  major: { label: 'majors', n: 3, ivals: [0, 4, 7],     suffix: ' Major', sym: '' },
+  minor: { label: 'minors', n: 3, ivals: [0, 3, 7],     suffix: ' minor', sym: 'm' },
+  dim:   { label: 'dim',    n: 3, ivals: [0, 3, 6],     suffix: ' dim',   sym: '°' },
+  aug:   { label: 'aug',    n: 3, ivals: [0, 4, 8],     suffix: ' aug',   sym: '+' },
+  sus2:  { label: 'sus2',   n: 3, ivals: [0, 2, 7],     suffix: ' sus2',  sym: 'sus2' },
+  sus4:  { label: 'sus4',   n: 3, ivals: [0, 5, 7],     suffix: ' sus4',  sym: 'sus4' },
+  maj7:  { label: 'maj7',   n: 4, ivals: [0, 4, 7, 11], suffix: ' maj7',  sym: 'maj7' },
+  min7:  { label: 'min7',   n: 4, ivals: [0, 3, 7, 10], suffix: ' m7',    sym: 'm7' },
+  dom7:  { label: 'dom7',   n: 4, ivals: [0, 4, 7, 10], suffix: '7',      sym: '7' },
 };
 export const TYPE_GROUPS = [
   { label: 'triads', types: ['major', 'minor', 'dim', 'aug'] },

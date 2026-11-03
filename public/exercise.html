@@ -21,6 +21,37 @@
                     font-size: 28px; font-weight: 700; outline: none; font-family: inherit; }
   .ex-title-input:focus { border-bottom-color: var(--accent); }
   .ex-title-input:disabled { color: var(--muted); }
+  /* describe box: say what you want and the test appears below */
+  .ex-ai { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 26px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .ex-ai-input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+                 color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.5; resize: vertical; outline: none; }
+  .ex-ai-input:focus { border-color: var(--accent); }
+  .ex-ai-input:disabled { opacity: .6; cursor: not-allowed; }
+  .ex-ai-row { display: flex; align-items: center; gap: 12px; }
+  .ex-ai-btn:not(:disabled) { color: var(--accent); }
+  .ex-ai-btn:not(:disabled):hover { border-color: var(--accent); }
+  .ex-ai-note { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 640px; }
+  .ex-ai-note.is-error { color: #d64545; }
+  .ex-empty { margin-top: 26px; padding: 40px 18px; border: 1px dashed var(--line); border-radius: 14px; text-align: center; color: var(--muted); font-size: 14px; }
+  .ex-unplayable { margin-top: 26px; padding: 28px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .ex-unplayable b { color: var(--text); font-family: var(--mono); }
+  /* the chord race */
+  .cp-stage { padding: 34px 18px 22px; text-align: center; color: var(--text); }
+  .cp-row { display: flex; align-items: center; justify-content: center; gap: 36px; flex-wrap: wrap; min-height: 110px; }
+  .cp-name { font-size: 64px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .cp-inv { display: block; margin-top: 8px; font-size: 14px; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .cp-hint svg { display: block; max-width: 100%; height: auto; }
+  .cp-label { margin-top: 22px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .cp-done { padding: 26px 18px 8px; text-align: center; }
+  .cp-total { font-size: 44px; font-weight: 700; color: var(--text); }
+  .cp-total span { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .cp-splits { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 22px auto 6px; max-width: 640px; text-align: left; }
+  .cp-split { display: flex; justify-content: space-between; gap: 10px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); font-size: 13px; color: var(--text); }
+  .cp-split span:last-child { color: var(--muted); }
+  .cp-split.fast span:last-child { color: var(--good); }
+  .cp-split.slow span:last-child { color: #d97706; }
+  .cp-split.miss { border-color: rgba(239,68,68,.45); }
+  .cp-again { margin: 16px 0 6px; font-size: 12px; color: var(--muted); }
   .ex-edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 26px; }
   .ex-btn { font-family: var(--mono); font-size: 14px; padding: 10px 18px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
   .ex-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -74,15 +105,18 @@
     <section class="ex-edit">
       <a class="ex-back" href="/create">← Create</a>
       <input id="exTitle" class="ex-title-input" type="text" maxlength="80" placeholder="Untitled exercise" aria-label="Exercise title" disabled>
-      <section class="ex-player" id="exPlayer" aria-label="Note test">
-        <div class="ex-score">
-          <span><b id="exRight">0/0</b><span class="ex-lbl">right</span></span>
-          <span><b id="exAcc">—</b><span class="ex-lbl">accuracy</span></span>
-          <button id="exRestart" class="ex-btn ex-restart" type="button">restart (space)</button>
+      <div class="ex-ai">
+        <label class="fg-label" for="aiPrompt">Describe your exercise</label>
+        <textarea id="aiPrompt" class="ex-ai-input" rows="2" maxlength="400" disabled
+          placeholder="e.g. a chord race: major chords in every key, root position, with the keyboard hint"></textarea>
+        <div class="ex-ai-row">
+          <button id="aiBtn" class="ex-btn ex-ai-btn" type="button" disabled>Generate</button>
+          <span id="aiStatus" class="ex-status"></span>
         </div>
-        <div class="ex-stage" id="exStage"></div>
-        <div class="ex-player-foot"><span>Play the note on your MIDI keyboard. The octave counts.</span><span id="exPlayed"></span><span id="exMidi">Connecting to MIDI…</span></div>
-      </section>
+        <div id="aiNote" class="ex-ai-note" hidden></div>
+      </div>
+      <div id="exHost"></div>
+      <div class="ex-empty" id="exEmpty">Describe a test above and it will appear here.</div>
       <div class="ex-edit-actions">
         <button id="saveBtn" class="ex-btn ex-save" type="button" disabled>Save</button>
         <button id="delBtn" class="ex-btn ex-del" type="button" hidden>Delete</button>
@@ -108,9 +142,9 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { noteSpec } from '/exercise-spec.js';
-import { createNoteRunner, isRestartKey, keyName } from '/exercise-runner.js';
-import { renderStaff } from '/staff.js';
+import { EXAMPLES, validateSpec, isBlankSpec, describeSpec } from '/exercise-spec.js';
+import { canRunChords } from '/exercise-runner.js';
+import { createNotePlayer, createChordPlayer } from '/players.js';
 import { connectMidi } from '/midi-input.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
@@ -133,55 +167,123 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
-/* ---------- exercise page: every exercise is the note test (single notes on the treble staff) ---------- */
+/* ---------- exercise page: describe a test, then play it right here ---------- */
 // UI mirror of the limit. The database trigger (supabase/exercises.sql) is what actually enforces it.
 const MAX_EXERCISES = 5;
 const params = new URLSearchParams(location.search);
 let exId = params.get('id');           // no id = a new exercise (nothing is saved until the first Save)
 let userSession = null;
-const spec = noteSpec();               // what gets saved: the same spec every time
+let spec = null;                       // null = nothing described yet
+let player = null;                     // the player currently on screen
 let ready = false, busy = false;       // ready = signed in and (if opening a saved one) the exercise loaded
+const clone = x => JSON.parse(JSON.stringify(x));
 const setStatus = t => { $('exStatus').textContent = t || ''; };
-const syncButtons = () => { $('saveBtn').disabled = busy || !ready; };
+const syncButtons = () => { $('saveBtn').disabled = busy || !ready || !spec || validateSpec(spec).length > 0; };
 
-/* ----- the player ----- */
-let runner = createNoteRunner(spec), flashTimer = null;
-function drawPlayer(result){
-  const s = runner.state();
-  $('exRight').textContent = s.right + '/' + s.attempts;
-  $('exAcc').textContent = s.accuracy === null ? '—' : s.accuracy + '%';
-  $('exStage').innerHTML = renderStaff(s.target);
-  $('exPlayed').textContent = s.lastKey === null ? '' : 'You played ' + keyName(s.lastKey) + (s.last === 'right' ? ' ✓' : ' ✗');
-  if(result){                                           // flash green for a hit, red for a miss
-    const el = $('exPlayer');
-    el.classList.remove('flash-right', 'flash-miss'); void el.offsetWidth;
-    el.classList.add(result === 'right' ? 'flash-right' : 'flash-miss');
-    clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('flash-right', 'flash-miss'), 260);
-  }
+/* ----- the player on screen ----- */
+let midiText = 'Connecting to MIDI…', midiStarted = false;
+const showMidiText = () => document.querySelectorAll('.ex-midi').forEach(el => { el.textContent = midiText; });
+function ensureMidi(){
+  if(midiStarted) return;                              // ask the browser for MIDI only once there is something to play
+  midiStarted = true;
+  connectMidi({
+    onNoteOn: (key, t) => { if(player) player.keyDown(key, t); },
+    onNoteOff: (key, t) => { if(player) player.keyUp(key, t); },
+    onStatus: text => { midiText = text; showMidiText(); },
+  });
 }
-function restartPlayer(){ runner.restart(); drawPlayer(null); }
-$('exRestart').onclick = restartPlayer;
+function mount(){
+  if(player){ player.destroy(); player = null; }
+  const host = $('exHost'); host.innerHTML = '';
+  $('exEmpty').hidden = !!spec;
+  if(!spec){ syncButtons(); return; }
+  if(spec.pool.kind === 'note') player = createNotePlayer(host, spec);
+  else if(canRunChords(spec)) player = createChordPlayer(host, spec);
+  else {                                               // a valid test the player can't run yet (diatonic, progressions, voice leading, other scorings)
+    const box = document.createElement('div'); box.className = 'ex-unplayable';
+    const b = document.createElement('b'); b.textContent = describeSpec(spec);
+    box.append(b, document.createElement('br'), "This kind of test can't be played here yet. It's saved fine, and you can describe a different one above.");
+    host.appendChild(box);
+  }
+  if(player){ showMidiText(); ensureMidi(); }
+  syncButtons();
+}
 document.addEventListener('keydown', e => {
-  if(!isRestartKey(e) || e.repeat) return;
+  if(!player || !(e.code === 'Space' || e.key === ' ') || e.repeat) return;
   const t = e.target, tag = t && t.tagName;
-  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;   // a space typed into the title is just a space
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;   // a space typed into the title or the describe box is just a space
   e.preventDefault();                                   // also stops a focused button from being "clicked" by the space
-  restartPlayer();
+  player.restart();
 });
-drawPlayer(null);
-connectMidi({ onNoteOn: key => drawPlayer(runner.press(key).last), onStatus: text => { $('exMidi').textContent = text; } });
+
+/* ----- describe it: the sentence becomes a test ----- */
+const AI_PER_DAY = 5;   // mirrors LIMITS.perUserPerDay in src/generate-exercise.js (a label only; the server enforces the limit)
+let aiBusy = false, autoTitle = '';
+const leftLabel = n => Math.max(0, n) + (n === 1 ? ' generation' : ' generations') + ' left today';
+function setAiNote(text, isError){ const n = $('aiNote'); n.textContent = text || ''; n.hidden = !text; n.classList.toggle('is-error', !!isError); }
+function syncAi(){
+  $('aiPrompt').disabled = !userSession;
+  $('aiBtn').disabled = !userSession || aiBusy || !$('aiPrompt').value.trim();
+}
+async function showAiBudget(){   // "n left today", read from the one row the database lets you see
+  const day = new Date().toISOString().slice(0, 10);   // the server counts in UTC days
+  const { data, error } = await supabase.from('ai_usage').select('requests').eq('user_id', userSession.user.id).eq('day', day).maybeSingle();
+  if(error) return;   // usage table not set up yet: just don't show a count
+  $('aiStatus').textContent = leftLabel(AI_PER_DAY - ((data && data.requests) || 0));
+}
+async function generate(){
+  const prompt = $('aiPrompt').value.trim();
+  if(!prompt || aiBusy || !userSession) return;
+  aiBusy = true; syncAi(); setAiNote(''); $('aiStatus').textContent = 'Thinking…';
+  let left = '';
+  try {
+    const { data:{ session } } = await supabase.auth.getSession();   // a fresh token, since they expire
+    const resp = await fetch('/api/generate-exercise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session ? session.access_token : '') },
+      body: JSON.stringify({ prompt }),
+    });
+    let data = null; try { data = await resp.json(); } catch {}
+    if(!data) setAiNote("Couldn't reach the generator. Try again in a moment.", true);
+    else {
+      if(typeof data.remaining === 'number') left = leftLabel(data.remaining);
+      if(data.ok && !validateSpec(data.spec).length){          // the browser re-checks, even though the server already did
+        spec = clone(data.spec);
+        const cur = $('exTitle').value.trim();
+        if(data.title && (!cur || cur === 'Untitled exercise' || cur === autoTitle)){ $('exTitle').value = data.title; autoTitle = data.title; }   // never overwrite a title you typed
+        mount(); setStatus('');
+        setAiNote((data.note ? data.note + ' ' : '') + 'Try it below, then Save.');
+      }
+      else if(data.ok) setAiNote("That didn't come out right. Try rephrasing.", true);
+      else if(data.unsupported) setAiNote(data.message || "That isn't something I can make yet.", false);
+      else setAiNote(data.error || "Couldn't generate that. Try again.", true);
+    }
+  } catch(e){ console.error('generate', e); setAiNote("Couldn't reach the generator. Try again in a moment.", true); }
+  $('aiStatus').textContent = left;
+  aiBusy = false; syncAi();
+}
+$('aiBtn').onclick = generate;
+$('aiPrompt').addEventListener('input', syncAi);
+$('aiPrompt').addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); generate(); } });
 
 /* ----- load / save / delete ----- */
 async function loadExercise(){
   // owner filter: someone else's public exercise is readable but is not yours to edit
-  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
+  const { data, error } = await supabase.from('exercises').select('id, title, spec').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
   if(error || !data){ if(error) console.error('load exercise', error); setStatus("Couldn't find that exercise."); return false; }
   $('exTitle').value = data.title;
   $('delBtn').hidden = false;
+  if(isBlankSpec(data.spec)) { spec = null; setStatus('This exercise is blank. Describe a test above.'); }
+  else if(validateSpec(data.spec).length){ spec = null; setStatus("This exercise's settings were not valid, so it was cleared. Describe a test above, then Save."); }
+  else spec = clone(data.spec);
+  mount();
   return true;
 }
 async function saveExercise(){
+  if(!spec) return;
   const title = $('exTitle').value.trim() || 'Untitled exercise';
+  const problems = validateSpec(spec);
+  if(problems.length){ setStatus(problems[0]); return; }
   busy = true; syncButtons(); setStatus('Saving…');
   if(exId){
     const { data, error } = await supabase.from('exercises').update({ title, spec }).eq('id', exId).select('id');
@@ -219,11 +321,16 @@ $('exTitle').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('save
   const { data:{ session } } = await supabase.auth.getSession();
   userSession = session;
   renderNav(session);
-  if(!session){ setStatus('Log in to save exercises.'); return; }   // anyone can play the test; saving needs a login
+  if(!exId){                                           // a brand-new exercise: blank, or a copy of one of the examples
+    const tpl = EXAMPLES.find(x => x.id === params.get('template'));
+    if(tpl){ spec = clone(tpl.spec); $('exTitle').value = tpl.title; autoTitle = tpl.title; setStatus('Copy of the “' + tpl.title + '” example. Not saved yet.'); }
+  }
+  mount();                                             // anyone can play; describing and saving need a login
+  if(!session){ setStatus(spec ? 'Log in to save exercises.' : 'Log in to describe and save exercises.'); syncAi(); return; }
   if(exId && !(await loadExercise())) return;          // an id that can't be loaded (not yours / deleted) stays read-only
   ready = true;
-  $('exTitle').disabled = false; syncButtons();
-  if(!exId) $('exTitle').focus();
+  $('exTitle').disabled = false; syncButtons(); syncAi(); showAiBudget();
+  if(!exId && !spec) $('aiPrompt').focus();
 })();
 </script>
 </body>

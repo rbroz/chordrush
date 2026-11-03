@@ -50,14 +50,17 @@
   .ex-toggle[aria-checked="true"] .ex-sw { background: var(--accent); }
   .ex-toggle[aria-checked="true"] .ex-sw::after { transform: translateX(12px); }
   .ex-card .ex-vis.is-public { color: var(--accent); }
-  /* examples: the four built-in tests, read-only; "Use as template" opens a copy in the editor */
-  .ex-section { margin: 40px 0 14px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  /* built-in tests: tiles at the end of the grid, read-only (no menu); opening one plays it, and Save makes your own copy */
   .ex-example { display: flex; flex-direction: column; justify-content: space-between; border: 1px dashed var(--line);
                 background: var(--bg); text-decoration: none; transition: border-color .12s; }
   .ex-example:hover { border-color: var(--accent); }
   .ex-example .ex-title { font-size: 15px; font-weight: 700; color: var(--text); }
   .ex-example .ex-blurb { margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--muted); }
   .ex-example .ex-use { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .ex-example.ex-soon { cursor: default; }
+  .ex-example.ex-soon:hover { border-color: var(--line); }
+  .ex-example.ex-soon .ex-title, .ex-example.ex-soon .ex-blurb { opacity: .55; }
+  .ex-example.ex-soon .ex-use { color: var(--muted); }
   .ex-card .ex-title { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
   .ex-card .ex-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
   .create-note { margin: 16px 0 0; font-size: 13px; color: var(--muted); min-height: 18px; }
@@ -99,9 +102,6 @@
       </div>
       <div class="ex-grid" id="exGrid"></div>
       <p class="create-note" id="exNote"></p>
-
-      <h2 class="ex-section">Examples</h2>
-      <div class="ex-grid" id="exExamples"></div>
     </section>
   </main>
 
@@ -123,6 +123,7 @@
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { EXAMPLES, describeSpec } from '/exercise-spec.js';
+import { canRunChords } from '/exercise-runner.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
   'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
@@ -165,7 +166,7 @@ function renderGrid(){
   if(!userSession)  first = '<a class="ex-tile ex-new" href="/?login=1"><span class="plus">+</span><span class="lbl">Log in to create</span></a>';
   else if(full)     first = '<div class="ex-tile ex-new disabled" aria-disabled="true"><span class="plus">+</span><span class="lbl">Limit reached</span></div>';
   else              first = '<a class="ex-tile ex-new" href="/exercise" target="_blank" rel="noopener" aria-label="New exercise"><span class="plus">+</span><span class="lbl">New</span></a>';
-  $('exGrid').innerHTML = first + exercises.map(tileHtml).join('');
+  $('exGrid').innerHTML = first + exercises.map(tileHtml).join('') + EXAMPLES.map(exampleTile).join('');
   $('exCount').textContent = userSession ? exercises.length + ' / ' + MAX_EXERCISES : '';
   $('exNote').textContent = !userSession ? 'Log in to create and keep exercises.'
     : loadFailed ? "Couldn't load your exercises right now."
@@ -234,14 +235,16 @@ async function deleteExercise(id){
   await refreshGrid();
 }
 
-// the four existing ChordRush tests, written in the new format; "Use as template" opens a copy in the editor
-function renderExamples(){
-  $('exExamples').innerHTML = EXAMPLES.map(x =>
-    '<a class="ex-tile ex-example" href="/exercise?template=' + encodeURIComponent(x.id) + '" target="_blank" rel="noopener">'
-    + '<div><div class="ex-title">' + escapeHtml(x.title) + '</div><div class="ex-blurb">' + escapeHtml(x.blurb) + '</div></div>'
-    + '<div class="ex-use">Use as template →</div></a>').join('');
+// the built-in tests (the four ChordRush tests, written in the exercise format), at the end of the grid after your own.
+// They open as a player; Save there makes your own copy (that copy uses one of your slots). A test with no player yet says so.
+function exampleTile(x){
+  const playable = canRunChords(x.spec);   // only the chord drill has a player so far
+  const inner = '<div><div class="ex-title">' + escapeHtml(x.title) + '</div><div class="ex-blurb">' + escapeHtml(x.blurb) + '</div></div>'
+              + '<div class="ex-use">' + (playable ? 'Built-in · play →' : 'Built-in · coming soon') + '</div>';
+  return playable
+    ? '<a class="ex-tile ex-example" href="/exercise?template=' + encodeURIComponent(x.id) + '">' + inner + '</a>'
+    : '<div class="ex-tile ex-example ex-soon" aria-disabled="true">' + inner + '</div>';
 }
-renderExamples();
 
 async function refreshGrid(){ await loadExercises(); renderGrid(); }
 // editors open in their own tabs; when you switch back here, pick up anything created, renamed or deleted
