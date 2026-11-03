@@ -29,12 +29,48 @@ bad('too many steps', s => { s.pool = { kind: 'progression', steps: Array(9).fil
 bad('bad numeral', s => { s.pool = { kind: 'progression', steps: ['I', 'bVII'], keys: [0] }; s.prompt = { show: 'numeral', hint: false }; });
 ok(validateSpec(null).length && validateSpec([]).length && validateSpec('x').length, 'non-objects rejected');
 
+// 2b. the note pool (single notes on the treble staff, key of C)
+const noteSpec = () => ({ v: 1, pool: poolFor('note'), prompt: { show: 'staff', hint: false }, accept: 'exact', scoring: 'accuracy' });
+ok(validateSpec(noteSpec()).length === 0, 'default note spec valid: ' + validateSpec(noteSpec()));
+ok(S.noteChoices().length === 17 + 11 + 11, 'all notes = 17 white keys + 11 sharps + 11 flats = 39, got ' + S.noteChoices().length);
+const all = S.noteChoices(), names = all.map(n => n.name);
+ok(new Set(names).size === all.length, 'no duplicate spellings');
+ok(all.every(n => n.midi >= S.NOTE_MIN && n.midi <= S.NOTE_MAX), 'every note inside A3..C6');
+ok(['E♯4', 'B♯4', 'C♭5', 'F♭5'].every(x => !names.includes(x)), 'no E♯ B♯ C♭ F♭');
+ok(names.includes('A3') && names.includes('C6') && names.includes('B♭3') && !names.includes('A♭3') && !names.includes('C♯6'), 'range edges');
+const by = n => all.find(x => x.name === n);
+ok(by('C4').midi === 60 && by('C4').step === 28 && by('E♭4').midi === 63 && by('E♭4').step === 30 && by('F♯5').midi === 78, 'midi + staff step math');
+ok(by('C♯4').midi === by('D♭4').midi && by('C♯4').step !== by('D♭4').step, 'C♯ and D♭ are one key but sit on different staff lines');
+ok(describeSpec(noteSpec()) === 'treble · A3–C6 · all notes · accuracy', 'note description: ' + describeSpec(noteSpec()));
+const badNote = (name, mut) => { const s = noteSpec(); mut(s); ok(validateSpec(s).length > 0, 'should reject: ' + name); };
+badNote('any pool option (the note pool has none)', s => { s.pool.accidentals = 'all'; });
+badNote('old low/high fields', s => { s.pool.low = 60; });
+badNote('unknown note-pool field', s => { s.pool.clef = 'bass'; });
+badNote('note with chord-name prompt', s => { s.prompt = { show: 'name', hint: false }; });
+badNote('note with hint', s => { s.prompt.hint = true; });
+badNote('note with triad_or_seventh', s => { s.accept = 'triad_or_seventh'; });
+badNote('note scored by time', s => { s.scoring = 'time'; });
+bad('staff prompt with chords pool', s => { s.prompt = { show: 'staff', hint: false }; });
+bad('accuracy scoring with chords pool', s => { s.scoring = 'accuracy'; });
+// switching into / out of the note pool repairs the other knobs, and the pool choice wins
+for (const e of EXAMPLES) {
+  const into = clone(e.spec); into.pool = poolFor('note');
+  const r1 = repairSpec(into, 'pool');
+  ok(validateSpec(r1).length === 0 && r1.pool.kind === 'note', 'into note pool from ' + e.id + ': ' + validateSpec(r1));
+  for (const k of ['chords', 'diatonic', 'progression']) {
+    const out = clone(r1); out.pool = poolFor(k, r1.pool);
+    const r2 = repairSpec(out, 'pool');
+    ok(validateSpec(r2).length === 0 && r2.pool.kind === k, 'out of note pool to ' + k + ': ' + validateSpec(r2));
+  }
+}
+
 // 3. fuzz: any sequence of editor changes stays valid AND your latest choice is never overridden
 const rnd = a => a[Math.floor(Math.random() * a.length)];
 const types = Object.keys(CHORD_TYPES), presets = Object.values(PROGRESSIONS).map(p => p.steps);
 function randomChange(spec) {
   const s = clone(spec); const r = Math.random();
-  if (r < 0.15) { const k = rnd(['chords', 'diatonic', 'progression']); s.pool = poolFor(k, s.pool); return { s, knob: 'pool', check: x => x.pool.kind === k }; }
+  // in the note pool the only knob is the pool itself (prompt/accept/scoring have exactly one valid value), so only pool changes are fair
+  if (s.pool.kind === 'note' || r < 0.15) { const k = rnd(['chords', 'diatonic', 'progression', 'note']); s.pool = poolFor(k, s.pool); return { s, knob: 'pool', check: x => x.pool.kind === k }; }
   if (r < 0.25 && s.pool.kind === 'chords') { const t = rnd(types); s.pool.type = t; return { s, knob: 'pool', check: x => x.pool.type === t || true }; }
   if (r < 0.35 && s.pool.kind === 'chords') { const four = CHORD_TYPES[s.pool.type].n === 4; const v = rnd(VOICINGS.filter(v => four || v !== '3rd')); s.pool.voicing = v; return { s, knob: 'pool', check: x => x.pool.voicing === v || true }; }
   if (r < 0.45 && s.pool.kind !== 'chords') { const k = Math.floor(Math.random() * 12); const i = s.pool.keys.indexOf(k); if (i >= 0) { if (s.pool.keys.length > 1) s.pool.keys.splice(i, 1); } else s.pool.keys.push(k); return { s, knob: 'pool', check: () => true }; }

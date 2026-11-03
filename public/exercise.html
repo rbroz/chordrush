@@ -21,30 +21,6 @@
                     font-size: 28px; font-weight: 700; outline: none; font-family: inherit; }
   .ex-title-input:focus { border-bottom-color: var(--accent); }
   .ex-title-input:disabled { color: var(--muted); }
-  /* natural-language box: describe it, the options below get filled in */
-  .ex-ai { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 26px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
-  .ex-ai-input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-                 color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.5; resize: vertical; outline: none; }
-  .ex-ai-input:focus { border-color: var(--accent); }
-  .ex-ai-input:disabled { opacity: .6; cursor: not-allowed; }
-  .ex-ai-row { display: flex; align-items: center; gap: 12px; }
-  .ex-ai-btn:not(:disabled) { color: var(--accent); }
-  .ex-ai-btn:not(:disabled):hover { border-color: var(--accent); }
-  .ex-ai-note { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 640px; }
-  .ex-ai-note.is-error { color: #d64545; }
-  /* the knob form: one row per knob, each a set of pills */
-  .ex-form { display: flex; flex-direction: column; gap: 22px; }
-  .ex-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-  .ex-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-  .ex-form .filterbar { flex-wrap: wrap; max-width: 100%; }
-  .ex-form .filter { padding: 7px 12px; font-size: 13px; }
-  .ex-form .ex-hint { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
-  .ex-form .ex-hint.active { border-color: var(--accent); }
-  .ex-form select { font-family: var(--mono); font-size: 13px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
-                    background: var(--panel); color: var(--text); cursor: pointer; }
-  .ex-form .ex-link { border: 0; background: none; padding: 0; color: var(--accent); font-family: var(--mono); font-size: 12px; cursor: pointer; }
-  .ex-summary { font-family: var(--mono); font-size: 13px; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--line); width: 100%; }
-  .ex-problems { font-size: 13px; color: #d64545; }
   .ex-edit-actions { display: flex; align-items: center; gap: 12px; margin-top: 26px; }
   .ex-btn { font-family: var(--mono); font-size: 14px; padding: 10px 18px; border-radius: 10px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
   .ex-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -53,6 +29,17 @@
   .ex-del { color: var(--muted); }
   .ex-del:hover { color: #d64545; border-color: #d64545; }
   .ex-status { font-size: 13px; color: var(--muted); }
+  /* the player: the exercise you are building, running right here */
+  .ex-player { margin-top: 26px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; transition: border-color .15s, box-shadow .15s; }
+  .ex-player.flash-right { border-color: var(--good); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+  .ex-player.flash-miss  { border-color: var(--bad);  box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
+  .ex-score { display: flex; align-items: center; gap: 28px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 15px; background: var(--bg); }
+  .ex-score b { font-size: 20px; }
+  .ex-score .ex-lbl { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .ex-restart { margin-left: auto; }
+  .ex-stage { padding: 6px 18px 2px; color: var(--text); }
+  .ex-stage .staff { display: block; width: 100%; height: auto; max-height: 320px; }
+  .ex-player-foot { padding: 0 18px 14px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
 </style>
 </head>
 <body>
@@ -87,17 +74,15 @@
     <section class="ex-edit">
       <a class="ex-back" href="/create">← Create</a>
       <input id="exTitle" class="ex-title-input" type="text" maxlength="80" placeholder="Untitled exercise" aria-label="Exercise title" disabled>
-      <div class="ex-ai">
-        <label class="fg-label" for="aiPrompt">Describe your exercise</label>
-        <textarea id="aiPrompt" class="ex-ai-input" rows="2" maxlength="400" disabled
-          placeholder="e.g. ii–V–I in every key, show me just the numerals, and give bonus points for playing the 7th"></textarea>
-        <div class="ex-ai-row">
-          <button id="aiBtn" class="ex-btn ex-ai-btn" type="button" disabled>Generate</button>
-          <span id="aiStatus" class="ex-status"></span>
+      <section class="ex-player" id="exPlayer" aria-label="Note test">
+        <div class="ex-score">
+          <span><b id="exRight">0/0</b><span class="ex-lbl">right</span></span>
+          <span><b id="exAcc">—</b><span class="ex-lbl">accuracy</span></span>
+          <button id="exRestart" class="ex-btn ex-restart" type="button">restart (space)</button>
         </div>
-        <div id="aiNote" class="ex-ai-note" hidden></div>
-      </div>
-      <div class="ex-form" id="exForm"></div>
+        <div class="ex-stage" id="exStage"></div>
+        <div class="ex-player-foot"><span>Play the note on your MIDI keyboard. The octave counts.</span><span id="exPlayed"></span><span id="exMidi">Connecting to MIDI…</span></div>
+      </section>
       <div class="ex-edit-actions">
         <button id="saveBtn" class="ex-btn ex-save" type="button" disabled>Save</button>
         <button id="delBtn" class="ex-btn ex-del" type="button" hidden>Delete</button>
@@ -123,7 +108,10 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { ROOT_NAMES, CHORD_TYPES, TYPE_GROUPS, PROGRESSIONS, EXAMPLES, defaultSpec, poolFor, validateSpec, repairSpec, describeSpec, isBlankSpec } from '/exercise-spec.js';
+import { noteSpec } from '/exercise-spec.js';
+import { createNoteRunner, isRestartKey, keyName } from '/exercise-runner.js';
+import { renderStaff } from '/staff.js';
+import { connectMidi } from '/midi-input.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
   'sb_publishable_511wgi5up_rKkUMIL91U7A_i_FhDnhE'
@@ -145,144 +133,55 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
-/* ---------- exercise editor: pick one option per knob; saved as a validated spec (data, never code) ---------- */
+/* ---------- exercise page: every exercise is the note test (single notes on the treble staff) ---------- */
 // UI mirror of the limit. The database trigger (supabase/exercises.sql) is what actually enforces it.
 const MAX_EXERCISES = 5;
 const params = new URLSearchParams(location.search);
 let exId = params.get('id');           // no id = a new exercise (nothing is saved until the first Save)
 let userSession = null;
-let spec = defaultSpec();
-let ready = false, busy = false;       // ready = signed in and (if editing) the exercise loaded
-const clone = x => JSON.parse(JSON.stringify(x));
-const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const spec = noteSpec();               // what gets saved: the same spec every time
+let ready = false, busy = false;       // ready = signed in and (if opening a saved one) the exercise loaded
 const setStatus = t => { $('exStatus').textContent = t || ''; };
+const syncButtons = () => { $('saveBtn').disabled = busy || !ready; };
 
-/* ----- natural-language generation: describe it, the options below get filled in ----- */
-const AI_PER_DAY = 5;   // mirrors LIMITS.perUserPerDay in src/generate-exercise.js (a label only; the server enforces the limit)
-let aiBusy = false, autoTitle = '';
-const leftLabel = n => Math.max(0, n) + (n === 1 ? ' generation' : ' generations') + ' left today';
-function setAiNote(text, isError){ const n = $('aiNote'); n.textContent = text || ''; n.hidden = !text; n.classList.toggle('is-error', !!isError); }
-function syncAi(){
-  $('aiPrompt').disabled = !userSession;
-  $('aiBtn').disabled = !userSession || aiBusy || !$('aiPrompt').value.trim();
-}
-async function showAiBudget(){   // "n left today", read from the one row the database lets you see
-  const day = new Date().toISOString().slice(0, 10);   // the server counts in UTC days
-  const { data, error } = await supabase.from('ai_usage').select('requests').eq('user_id', userSession.user.id).eq('day', day).maybeSingle();
-  if(error) return;   // usage table not set up yet: just don't show a count
-  $('aiStatus').textContent = leftLabel(AI_PER_DAY - ((data && data.requests) || 0));
-}
-async function generate(){
-  const prompt = $('aiPrompt').value.trim();
-  if(!prompt || aiBusy || !userSession) return;
-  aiBusy = true; syncAi(); setAiNote(''); $('aiStatus').textContent = 'Thinking…';
-  let left = '';
-  try {
-    const { data:{ session } } = await supabase.auth.getSession();   // a fresh token, since they expire
-    const resp = await fetch('/api/generate-exercise', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session ? session.access_token : '') },
-      body: JSON.stringify({ prompt }),
-    });
-    let data = null; try { data = await resp.json(); } catch {}
-    if(!data) setAiNote("Couldn't reach the generator. You can still set the options by hand.", true);
-    else {
-      if(typeof data.remaining === 'number') left = leftLabel(data.remaining);
-      if(data.ok && !validateSpec(data.spec).length){          // the browser re-checks, even though the server already did
-        spec = clone(data.spec);
-        const cur = $('exTitle').value.trim();
-        if(data.title && (!cur || cur === 'Untitled exercise' || cur === autoTitle)){ $('exTitle').value = data.title; autoTitle = data.title; }   // never overwrite a title you typed
-        renderForm(); setStatus('');
-        setAiNote((data.note ? data.note + ' ' : '') + 'Check the options below, then Save.');
-      }
-      else if(data.ok) setAiNote("That didn't come out right. Try rephrasing, or set the options by hand.", true);
-      else if(data.unsupported) setAiNote(data.message || "That isn't something I can make yet.", false);
-      else setAiNote(data.error || "Couldn't generate that. Try again.", true);
-    }
-  } catch(e){ console.error('generate', e); setAiNote("Couldn't reach the generator. You can still set the options by hand.", true); }
-  $('aiStatus').textContent = left;
-  aiBusy = false; syncAi();
-}
-$('aiBtn').onclick = generate;
-$('aiPrompt').addEventListener('input', syncAi);
-$('aiPrompt').addEventListener('keydown', e => { if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); generate(); } });
-
-
-/* ----- the form ----- */
-const bar = (knob, opts, current) => '<div class="filterbar">' + opts.map(o =>
-  '<button type="button" class="filter' + (o.v === current ? ' active' : '') + '" data-knob="' + knob + '" data-v="' + escapeHtml(o.v) + '">' + escapeHtml(o.l) + '</button>').join('') + '</div>';
-const row = (label, inner) => '<div class="ex-row"><span class="fg-label">' + label + '</span>' + inner + '</div>';
-
-function renderForm(){
-  const p = spec.pool;
-  let html = row('What comes up', bar('pool-kind', [{v:'chords', l:'chords'}, {v:'diatonic', l:'diatonic'}, {v:'progression', l:'progression'}], p.kind));
-  if(p.kind === 'chords'){
-    const four = CHORD_TYPES[p.type].n === 4;
-    html += row('Chord type', '<select id="selType">' + TYPE_GROUPS.map(g => '<optgroup label="' + g.label + '">'
-              + g.types.map(t => '<option value="' + t + '"' + (t === p.type ? ' selected' : '') + '>' + CHORD_TYPES[t].label + '</option>').join('') + '</optgroup>').join('') + '</select>')
-          + row('Voicing', bar('voicing', [{v:'any', l:'any'}, {v:'root', l:'root'}, {v:'1st', l:'1st inv'}, {v:'2nd', l:'2nd inv'}].concat(four ? [{v:'3rd', l:'3rd inv'}] : []), p.voicing));
-  } else {
-    if(p.kind === 'progression'){
-      const id = Object.keys(PROGRESSIONS).find(k => PROGRESSIONS[k].steps.join() === p.steps.join()) || '';
-      html += row('Progression', '<select id="selProg">' + (id ? '' : '<option value="" selected>custom</option>')
-                + Object.keys(PROGRESSIONS).map(k => '<option value="' + k + '"' + (k === id ? ' selected' : '') + '>' + PROGRESSIONS[k].label + '</option>').join('') + '</select>');
-    }
-    html += row('Keys', '<div class="ex-sub"><div class="filterbar">' + ROOT_NAMES.map((n, pc) =>
-              '<button type="button" class="filter' + (p.keys.includes(pc) ? ' active' : '') + '" data-knob="key" data-v="' + pc + '">' + n + '</button>').join('')
-              + '</div><button type="button" class="ex-link" data-knob="keys-all">all keys</button></div>');
+/* ----- the player ----- */
+let runner = createNoteRunner(spec), flashTimer = null;
+function drawPlayer(result){
+  const s = runner.state();
+  $('exRight').textContent = s.right + '/' + s.attempts;
+  $('exAcc').textContent = s.accuracy === null ? '—' : s.accuracy + '%';
+  $('exStage').innerHTML = renderStaff(s.target);
+  $('exPlayed').textContent = s.lastKey === null ? '' : 'You played ' + keyName(s.lastKey) + (s.last === 'right' ? ' ✓' : ' ✗');
+  if(result){                                           // flash green for a hit, red for a miss
+    const el = $('exPlayer');
+    el.classList.remove('flash-right', 'flash-miss'); void el.offsetWidth;
+    el.classList.add(result === 'right' ? 'flash-right' : 'flash-miss');
+    clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('flash-right', 'flash-miss'), 260);
   }
-  html += row('What you see', '<div class="ex-sub">'
-            + bar('show', [{v:'name', l:'chord name'}, {v:'numeral', l:'roman numeral'}, {v:'both', l:'both'}], spec.prompt.show)
-            + (spec.prompt.show === 'name' ? '<button type="button" class="filter ex-hint' + (spec.prompt.hint ? ' active' : '') + '" data-knob="hint">keyboard hint ' + (spec.prompt.hint ? 'on' : 'off') + '</button>' : '')
-            + '</div>');
-  html += row('What counts', bar('accept', [{v:'exact', l:'exact chord'}, {v:'triad_or_seventh', l:'triad or 7th'}], spec.accept));
-  html += row('How it’s scored', bar('scoring', [{v:'time', l:'time + accuracy'}, {v:'points', l:'points'}, {v:'smoothness', l:'smoothness'}], spec.scoring));
-  const problems = validateSpec(spec);
-  html += '<div class="ex-summary">' + escapeHtml(describeSpec(spec)) + '</div>'
-        + (problems.length ? '<div class="ex-problems">' + problems.map(escapeHtml).join('<br>') + '</div>' : '');
-  $('exForm').innerHTML = html;
-  syncButtons();
 }
-function syncButtons(){ $('saveBtn').disabled = busy || !ready || validateSpec(spec).length > 0; }
-
-// change ONE knob, then let repairSpec bend the others so the whole spec stays valid (your latest choice always wins)
-function change(knob, mutate){ const next = clone(spec); mutate(next); spec = repairSpec(next, knob); renderForm(); setStatus(''); }
-
-$('exForm').addEventListener('click', e => {
-  const b = e.target.closest('[data-knob]'); if(!b) return;
-  const k = b.dataset.knob, v = b.dataset.v;
-  if(k === 'pool-kind')      change('pool', s => { if(s.pool.kind !== v) s.pool = poolFor(v, s.pool); });
-  else if(k === 'voicing')   change('pool', s => { s.pool.voicing = v; });
-  else if(k === 'key')       change('pool', s => { const n = +v, i = s.pool.keys.indexOf(n); if(i >= 0){ if(s.pool.keys.length > 1) s.pool.keys.splice(i, 1); } else s.pool.keys.push(n); });
-  else if(k === 'keys-all')  change('pool', s => { s.pool.keys = ROOT_NAMES.map((n, i) => i); });
-  else if(k === 'show')      change('prompt', s => { s.prompt.show = v; });
-  else if(k === 'hint')      change('prompt', s => { s.prompt.hint = !s.prompt.hint; });
-  else if(k === 'accept')    change('accept', s => { s.accept = v; });
-  else if(k === 'scoring')   change('scoring', s => { s.scoring = v; });
+function restartPlayer(){ runner.restart(); drawPlayer(null); }
+$('exRestart').onclick = restartPlayer;
+document.addEventListener('keydown', e => {
+  if(!isRestartKey(e) || e.repeat) return;
+  const t = e.target, tag = t && t.tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;   // a space typed into the title is just a space
+  e.preventDefault();                                   // also stops a focused button from being "clicked" by the space
+  restartPlayer();
 });
-$('exForm').addEventListener('change', e => {
-  if(e.target.id === 'selType') change('pool', s => { s.pool.type = e.target.value; });
-  else if(e.target.id === 'selProg' && e.target.value) change('pool', s => { s.pool.steps = PROGRESSIONS[e.target.value].steps.slice(); });
-});
+drawPlayer(null);
+connectMidi({ onNoteOn: key => drawPlayer(runner.press(key).last), onStatus: text => { $('exMidi').textContent = text; } });
 
 /* ----- load / save / delete ----- */
 async function loadExercise(){
   // owner filter: someone else's public exercise is readable but is not yours to edit
-  const { data, error } = await supabase.from('exercises').select('id, title, spec').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
+  const { data, error } = await supabase.from('exercises').select('id, title').eq('id', exId).eq('user_id', userSession.user.id).maybeSingle();
   if(error || !data){ if(error) console.error('load exercise', error); setStatus("Couldn't find that exercise."); return false; }
   $('exTitle').value = data.title;
   $('delBtn').hidden = false;
-  if(isBlankSpec(data.spec) || validateSpec(data.spec).length){
-    spec = defaultSpec();
-    setStatus(isBlankSpec(data.spec) ? 'This exercise is blank. Pick your options, then Save.' : 'This exercise needed attention, so it was reset to the default options. Save to keep them.');
-  } else spec = clone(data.spec);
-  renderForm();
   return true;
 }
 async function saveExercise(){
   const title = $('exTitle').value.trim() || 'Untitled exercise';
-  const problems = validateSpec(spec);
-  if(problems.length){ setStatus(problems[0]); return; }
   busy = true; syncButtons(); setStatus('Saving…');
   if(exId){
     const { data, error } = await supabase.from('exercises').update({ title, spec }).eq('id', exId).select('id');
@@ -320,15 +219,10 @@ $('exTitle').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('save
   const { data:{ session } } = await supabase.auth.getSession();
   userSession = session;
   renderNav(session);
-  if(!exId){                                           // a brand-new exercise, optionally copied from one of the examples
-    const tpl = EXAMPLES.find(x => x.id === params.get('template'));
-    if(tpl){ spec = clone(tpl.spec); $('exTitle').value = tpl.title; autoTitle = tpl.title; setStatus('Copy of the “' + tpl.title + '” example. Not saved yet.'); }
-  }
-  renderForm();                                        // anyone can try the controls; saving needs a login
-  if(!session){ setStatus('Log in to save exercises.'); syncAi(); return; }
+  if(!session){ setStatus('Log in to save exercises.'); return; }   // anyone can play the test; saving needs a login
   if(exId && !(await loadExercise())) return;          // an id that can't be loaded (not yours / deleted) stays read-only
   ready = true;
-  $('exTitle').disabled = false; syncButtons(); syncAi(); showAiBudget();
+  $('exTitle').disabled = false; syncButtons();
   if(!exId) $('exTitle').focus();
 })();
 </script>

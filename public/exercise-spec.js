@@ -1,10 +1,11 @@
 // ChordRush exercise spec, version 1.
 //
 // An exercise is DATA, never code. It picks one option per "knob":
-//   pool     what comes up        (a chord type × 12 roots, a key's diatonic chords, or a progression across keys)
-//   prompt   what you see         (chord name, roman numeral, or both; optional keyboard hint)
+//   pool     what comes up        (a chord type × 12 roots, a key's diatonic chords, a progression across keys,
+//                                  or single notes on the treble staff in the key of C)
+//   prompt   what you see         (chord name, roman numeral, or both; optional keyboard hint; or the staff, for notes)
 //   accept   what counts          (the exact chord, or the triad OR its diatonic 7th)
-//   scoring  how it is judged     (time + accuracy, points, or voice-leading smoothness)
+//   scoring  how it is judged     (time + accuracy, points, voice-leading smoothness; or right/attempts for notes)
 //
 // Everything is checked against the fixed lists below, so a spec can carry nothing except these choices.
 // The four existing ChordRush tests are four points in this space (see EXAMPLES).
@@ -30,14 +31,36 @@ export const PROGRESSIONS = {
   'I-IV-V':    { label: 'I–IV–V',    steps: ['I', 'IV', 'V'] },         // blues / rock / folk
   'ii-V-I':    { label: 'ii–V–I',    steps: ['ii', 'V', 'I'] },         // jazz cornerstone
 };
-const PROMPT_SHOWS = ['name', 'numeral', 'both'];
+const PROMPT_SHOWS = ['name', 'numeral', 'both', 'staff'];   // 'staff' = a note drawn on the treble clef (note pool only)
 const ACCEPTS = ['exact', 'triad_or_seventh'];
-const SCORINGS = ['time', 'points', 'smoothness'];
+const SCORINGS = ['time', 'points', 'smoothness', 'accuracy'];   // 'accuracy' = right / attempts (note pool only)
 const ALL_KEYS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+/* ---------- the note pool: single notes on the treble staff, A3 (two ledger lines below) to C6 (two above) ---------- */
+// A note is a SPELLING (letter + accidental + octave), because a MIDI key can't tell C♯ from D♭. You play it on the keyboard,
+// so either spelling of a black key is answered by the same key. E♯, B♯, C♭ and F♭ are left out (they'd be trick questions on a keyboard).
+export const NOTE_MIN = 57;   // A3
+export const NOTE_MAX = 84;   // C6
+const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'], LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
+const SHARPABLE = ['C', 'D', 'F', 'G', 'A'], FLATTABLE = ['D', 'E', 'G', 'A', 'B'];   // letters that have a black key above / below them
+// every note the pool can ask for (naturals, sharps and flats, no options): { midi, letter, acc (-1, 0, +1), octave, step (staff position: C4 = 28), name }
+export function noteChoices() {
+  const out = [];
+  for (let octave = 3; octave <= 6; octave++) LETTERS.forEach((letter, i) => {
+    for (const acc of [-1, 0, 1]) {
+      if (acc === 0 ? false : acc > 0 ? !SHARPABLE.includes(letter) : !FLATTABLE.includes(letter)) continue;
+      const midi = 12 * (octave + 1) + LETTER_PC[i] + acc;
+      if (midi < NOTE_MIN || midi > NOTE_MAX) continue;
+      out.push({ midi, letter, acc, octave, step: octave * 7 + i, name: letter + (acc > 0 ? '♯' : acc < 0 ? '♭' : '') + octave });
+    }
+  });
+  return out;
+}
+export const noteRangeLabel = () => 'A3–C6';
 
 const clone = x => JSON.parse(JSON.stringify(x));
 const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
-const isKeyed = s => s.pool.kind !== 'chords';   // diatonic / progression pools carry a key (so numerals and 7ths make sense)
+const isKeyed = s => s.pool.kind === 'diatonic' || s.pool.kind === 'progression';   // these pools carry a key (so numerals and 7ths make sense)
 
 /* ---------- the four existing tests, as specs ---------- */
 export const EXAMPLES = [
@@ -60,6 +83,8 @@ export const EXAMPLES = [
 ];
 
 export const defaultSpec = () => clone(EXAMPLES[0].spec);
+// the one exercise the editor page makes right now: single notes on the treble staff (A3 to C6, naturals, sharps and flats)
+export const noteSpec = () => ({ v: SPEC_VERSION, pool: { kind: 'note' }, prompt: { show: 'staff', hint: false }, accept: 'exact', scoring: 'accuracy' });
 export const isBlankSpec = s => s == null || (isObj(s) && Object.keys(s).length === 0);
 
 /* ---------- validation: returns a list of problems (empty = valid) ---------- */
@@ -89,6 +114,8 @@ export function validateSpec(s) {
     onlyKeys(p, ['kind', 'steps', 'keys'], 'pool', errs);
     if (!(Array.isArray(p.steps) && p.steps.length >= 2 && p.steps.length <= 8 && p.steps.every(n => NUMERALS.includes(n)))) errs.push('pool: a progression needs 2 to 8 roman numerals');
     if (!validKeys(p.keys)) errs.push('pool: pick at least one key');
+  } else if (p.kind === 'note') {
+    onlyKeys(p, ['kind'], 'pool', errs);   // nothing to configure: every note from A3 to C6, naturals, sharps and flats
   } else errs.push('pool: unknown kind');
 
   const pr = s.prompt;
@@ -102,8 +129,17 @@ export function validateSpec(s) {
   if (!SCORINGS.includes(s.scoring)) errs.push('scoring: unknown option');
   if (errs.length) return errs;   // shapes are sound; now check the combination
 
+  if (p.kind === 'note') {   // a note exercise is shown on the staff, must be the exact note, and is scored by accuracy
+    if (pr.show !== 'staff') errs.push('a note exercise is shown on the staff');
+    if (pr.hint) errs.push('the keyboard hint is for chord names only');
+    if (s.accept !== 'exact') errs.push('a note must be played exactly');
+    if (s.scoring !== 'accuracy') errs.push('a note exercise is scored by accuracy');
+    return errs;
+  }
+  if (pr.show === 'staff') errs.push('the staff prompt needs the note pool');
+  if (s.scoring === 'accuracy') errs.push('accuracy scoring needs the note pool');
   const keyed = isKeyed(s);
-  if (pr.show !== 'name' && !keyed) errs.push('roman numerals need a diatonic or progression pool');
+  if (pr.show !== 'name' && pr.show !== 'staff' && !keyed) errs.push('roman numerals need a diatonic or progression pool');
   if (pr.hint && pr.show !== 'name') errs.push('the keyboard hint only works with the chord-name prompt');
   if (s.accept === 'triad_or_seventh' && !keyed) errs.push('triad-or-7th needs a diatonic or progression pool');
   if (s.scoring === 'smoothness' && smoothnessInvalid(s)) errs.push('smoothness scoring needs 3-note chords, any voicing, and exact chords');
@@ -120,6 +156,7 @@ function smoothnessInvalid(s) {
 // default pool when switching kinds (keeps your keys when moving between diatonic and progression)
 export function poolFor(kind, prev) {
   const keys = prev && Array.isArray(prev.keys) && validKeys(prev.keys) ? prev.keys.slice() : null;
+  if (kind === 'note')        return { kind };
   if (kind === 'chords')      return { kind, type: 'major', voicing: 'any' };
   if (kind === 'diatonic')    return { kind, keys: keys || [0] };
   return { kind: 'progression', steps: PROGRESSIONS['I-V-vi-IV'].steps.slice(), keys: keys || ALL_KEYS.slice() };
@@ -129,6 +166,12 @@ export function poolFor(kind, prev) {
 // `changed` is the knob you just touched, so your choice always wins over the others.
 export function repairSpec(spec, changed) {
   const s = clone(spec);
+  if (s.pool.kind === 'note') {                                  // a note exercise has exactly one valid prompt / accept / scoring
+    s.prompt = { show: 'staff', hint: false }; s.accept = 'exact'; s.scoring = 'accuracy';
+    return s;
+  }
+  if (s.prompt.show === 'staff') s.prompt = isKeyed(s) ? { show: 'numeral', hint: false } : { show: 'name', hint: true };   // left the note pool
+  if (s.scoring === 'accuracy') s.scoring = 'time';
   if (!isKeyed(s)) {
     if (changed === 'pool') {                                    // picked chords: numerals/7ths no longer apply
       if (s.prompt.show !== 'name') { s.prompt.show = 'name'; s.prompt.hint = true; }
@@ -156,6 +199,7 @@ export function describeSpec(s) {
   if (isBlankSpec(s)) return 'blank';
   if (validateSpec(s).length) return 'needs attention';
   const p = s.pool;
+  if (p.kind === 'note') return 'treble · ' + noteRangeLabel() + ' · all notes · accuracy';
   let pool;
   if (p.kind === 'chords') {
     pool = CHORD_TYPES[p.type].label + ' · ' + (p.voicing === 'any' ? 'any voicing' : p.voicing === 'root' ? 'root' : p.voicing + ' inv');
