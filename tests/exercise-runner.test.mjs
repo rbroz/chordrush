@@ -58,7 +58,7 @@ ok(s.right === 0 && s.attempts === 0 && s.accuracy === null && s.last === null, 
 ok(all.some(x => x.midi === s.target.midi), 'restart picks a valid note');
 
 // 7. 20,000 random hits: never the same key twice in a row, and every one of the 39 notes shows up
-r = createNoteRunner(spec, seeded(4));
+r = createNoteRunner(spec, seeded(4), { reps: Infinity });
 const seen = new Set(); let repeats = 0;
 for (let i = 0; i < 20000; i++) {
   const cur = r.state().target; seen.add(cur.name);
@@ -69,13 +69,13 @@ for (let i = 0; i < 20000; i++) {
 ok(repeats === 0, 'no immediate repeats in 20,000 hits (got ' + repeats + ')');
 ok(seen.size === 39, 'all 39 notes appear (saw ' + seen.size + ')');
 // ...and with Math.random, not just my seeded one
-r = createNoteRunner(spec);
+r = createNoteRunner(spec, Math.random, { reps: Infinity });
 let rep2 = 0;
 for (let i = 0; i < 5000; i++) { const c = r.state().target.midi; r.press(c); if (r.state().target.midi === c) rep2++; }
 ok(rep2 === 0, 'no immediate repeats with Math.random');
 
 // 8. accuracy is always hits / attempts
-r = createNoteRunner(spec, seeded(5));
+r = createNoteRunner(spec, seeded(5), { reps: Infinity });
 let hits = 0, tries = 0;
 for (let i = 0; i < 3000; i++) {
   const hit = Math.random() < 0.7; const cur = r.state().target;
@@ -105,6 +105,26 @@ const tt = r.state().target.midi; r.press(tt === 60 ? 61 : 60);
 ok(r.state().lastKey === (tt === 60 ? 61 : 60), 'a miss records the key you played');
 r.press(tt); ok(r.state().lastKey === tt, 'a hit records it too');
 r.restart(); ok(r.state().lastKey === null, 'restart clears it');
+
+// 10c. reps: the game is over after that many hits; the clock runs from the first key to the last hit
+r = createNoteRunner(spec, seeded(9), { reps: 5 });
+ok(r.state().reps === 5 && !r.state().done && r.state().elapsedMs === 0 && r.state().totalMs === null, 'reps 5: not done, clock at 0');
+r.press(r.state().target.midi === 60 ? 61 : 60, 1000);                          // a miss starts the clock
+ok(r.state(1400).elapsedMs === 400 && !r.state(1400).done, 'the clock starts at the first key, even a wrong one');
+for (let i = 0; i < 4; i++) { r.press(r.state().target.midi, 2000 + i * 500); }
+ok(r.state().right === 4 && !r.state().done, 'four hits of five: still going');
+s = r.press(r.state().target.midi, 5000);
+ok(s.done && s.right === 5 && s.attempts === 6 && s.target === null, 'fifth hit ends it: 5 right of 6 attempts, no target');
+ok(s.totalMs === 4000 && s.elapsedMs === 4000 && r.state(99999).elapsedMs === 4000, 'time stops at the last hit: ' + s.totalMs);
+ok(s.accuracy === 83, 'accuracy 5/6 = 83%: ' + s.accuracy);
+ok(r.press(60, 9000).attempts === 6 && r.state().done, 'keys after the end do nothing');
+s = r.restart();
+ok(!s.done && s.right === 0 && s.attempts === 0 && s.elapsedMs === 0 && s.target, 'restart: a fresh game with a note');
+r = createNoteRunner(spec, seeded(10));
+ok(r.state().reps === 20, 'default is 20 reps');
+{ let n = 0; while (!r.state().done && n < 1000) { r.press(r.state().target.midi, n * 10); n++; } ok(n === 20, 'default game ends after exactly 20 hits (took ' + n + ')'); }
+r = createNoteRunner(spec, seeded(11), { reps: 1 });
+ok(r.press(r.state().target.midi, 5).done, 'reps 1: one hit and it is over');
 
 // 11. it only runs note exercises
 for (const e of EXAMPLES) { let threw = false; try { createNoteRunner(e.spec); } catch { threw = true; } ok(threw, 'rejects the ' + e.id + ' exercise'); }

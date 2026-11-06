@@ -153,7 +153,7 @@ const syncButtons = () => { $('saveBtn').disabled = busy || !ready || !spec || v
 
 /* ----- the player on screen ----- */
 let midiText = 'Connecting to MIDI…', midiStarted = false;
-const showMidiText = () => document.querySelectorAll('.ex-midi').forEach(el => { el.textContent = midiText; });
+const showMidiText = () => document.querySelectorAll('.ex-midi').forEach(el => { el.textContent = el.classList.contains('ex-midi-quiet') && midiText.startsWith('Connected:') ? '' : midiText; });   // quiet ones stay blank when all is well
 function ensureMidi(){
   if(midiStarted) return;                              // ask the browser for MIDI only once there is something to play
   midiStarted = true;

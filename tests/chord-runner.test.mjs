@@ -55,6 +55,23 @@ const release = (r, keys, t) => { const ev = []; keys.forEach(k => ev.push(...r.
 const target = r => r.state(0).target;
 const playOne = (r, t, voicingBase = 48) => { const keys = notesFor(target(r), voicingBase); const ev = strike(r, keys, t); release(r, keys, t + 50); return ev; };
 
+// ---- 2b. reps: any number of chords per run ----
+for (const n of [2, 10, 12, 24, 48, 96, 100]) {
+  const o = buildChordOrder(spec(), seeded(n), n);
+  ok(o.length === n, `reps ${n}: ${n} chords`);
+  ok(o.every((c, i) => i === 0 || c.rootPc !== o[i - 1].rootPc), `reps ${n}: never the same chord twice in a row`);
+  if (n % 12 === 0) { const count = {}; o.forEach(c => { count[c.rootPc] = (count[c.rootPc] || 0) + 1; }); ok(Object.values(count).every(v => v === n / 12) && Object.keys(count).length === 12, `reps ${n}: every root exactly ${n / 12} times`); }
+  if (n < 12) ok(new Set(o.map(c => c.rootPc)).size === n, `reps ${n}: all different roots`);
+}
+ok(createChordRunner(spec(), seeded(1), { reps: 24 }).state(0).total === 24, 'the runner uses the reps option');
+ok(createChordRunner(spec(), seeded(1)).state(0).total === 12, 'default is 12');
+ok(createChordRunner(spec(), seeded(1), { reps: 1 }).state(0).total === 2, 'reps below 2 is raised to 2 (the first chord is the go-signal)');
+{ // a 24-chord run really ends after 24 chords
+  const rr = createChordRunner(spec(), seeded(3), { reps: 24 }); let tt = 1000, played = 0;
+  while (rr.state(0).phase !== 'done' && played < 100) { const keys = notesFor(rr.state(0).target); strike(rr, keys, tt); release(rr, keys, tt + 50); tt += 300; played++; }
+  ok(played === 24 && rr.state(0).results.length === 24, 'a 24-chord run ends after 24 chords (played ' + played + ')');
+}
+
 // ---- 3. the flow: go-signal, then a timed run ----
 let r = createChordRunner(spec(), seeded(1)), s = r.state(0);
 ok(s.phase === 'ready' && s.idx === 0 && s.total === 12 && s.misses === 0 && s.elapsedMs === 0 && s.accuracy === null, 'starts ready, 0 of 12');

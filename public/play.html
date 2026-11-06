@@ -16,6 +16,11 @@
   .pl-wrap h1 { font-size: 28px; font-weight: 700; color: var(--text); margin: 16px 0 6px; }
   .pl-blurb { font-size: 14px; color: var(--muted); margin: 0 0 22px; }
   .pl-wrap [hidden] { display: none !important; }
+  .pl-set { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 22px; margin: 0 0 18px; }
+  .pl-set-group { display: flex; align-items: center; gap: 10px; }
+  .pl-set .filter { padding: 7px 12px; font-size: 13px; }
+  .pl-timed { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
+  .pl-timed.active { border-color: var(--accent); }
   .pl-missing { margin-top: 26px; padding: 28px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--muted); font-size: 14px; }
 </style>
 </head>
@@ -52,6 +57,10 @@
       <a class="pl-back" href="/games">← Games</a>
       <h1 id="plTitle"></h1>
       <p class="pl-blurb" id="plBlurb"></p>
+      <div class="pl-set" id="plSet" hidden>
+        <div class="pl-set-group"><span class="fg-label">Reps</span><div class="filterbar" id="plReps"></div></div>
+        <button type="button" class="filter pl-timed" id="plTimed" aria-pressed="false"></button>
+      </div>
       <div id="exHost"></div>
       <div class="pl-missing" id="plMissing" hidden>That game isn't here. <a href="/games">Pick one from the Games page.</a></div>
     </section>
@@ -99,34 +108,62 @@ function renderNav(session){
     nav.innerHTML = `<a class="nav-btn" href="/?login=1">log in</a>`;
   }
 }
-/* ---------- play one game: nothing is saved, nothing goes on a leaderboard ---------- */
+/* ---------- play one game: nothing is saved to your account, nothing goes on a leaderboard ---------- */
+// The two settings (timed, reps) are remembered in this browser for each game.
 const game = GAMES.find(g => g.id === new URLSearchParams(location.search).get('game'));
-let player = null;
+let player = null, settings = null;
+const storeKey = () => 'chordrush:game:' + game.id;
+function loadSettings(){
+  const s = { ...game.defaults };
+  try {
+    const saved = JSON.parse(localStorage.getItem(storeKey()) || 'null');
+    if(saved && typeof saved.timed === 'boolean') s.timed = saved.timed;
+    if(saved && game.repOptions.includes(saved.reps)) s.reps = saved.reps;
+  } catch(e) {}
+  return s;
+}
+function saveSettings(){ try { localStorage.setItem(storeKey(), JSON.stringify(settings)); } catch(e) {} }
+function drawSettings(){
+  $('plReps').innerHTML = game.repOptions.map(n => '<button type="button" class="filter' + (n === settings.reps ? ' active' : '') + '" data-reps="' + n + '">' + n + '</button>').join('');
+  const b = $('plTimed'); b.classList.toggle('active', settings.timed); b.setAttribute('aria-pressed', String(settings.timed)); b.textContent = 'timed ' + (settings.timed ? 'on' : 'off');
+}
+let midiText = 'Connecting to MIDI…';
+const showMidi = () => document.querySelectorAll('.ex-midi').forEach(el => { el.textContent = el.classList.contains('ex-midi-quiet') && midiText.startsWith('Connected:') ? '' : midiText; });   // quiet ones stay blank when all is well
+function toggleTimed(){
+  settings.timed = !settings.timed;
+  if(player && player.setTimed){                       // the note game: flip the clock in place, keep the note and the score
+    saveSettings(); drawSettings(); player.setTimed(settings.timed); document.activeElement && document.activeElement.blur();
+  } else settingsChanged();                            // the chord race: a fresh game
+}
+function settingsChanged(){ saveSettings(); drawSettings(); mountGame(); document.activeElement && document.activeElement.blur(); }   // blur so the space bar restarts instead of re-pressing a button
+function mountGame(){                                  // (re)build the player with the current settings: a fresh game
+  if(player){ player.destroy(); player = null; }
+  const host = $('exHost'), spec = game.spec, options = { reps: settings.reps, timed: settings.timed };
+  if(spec.pool.kind === 'note') player = createNotePlayer(host, spec, { ...options, onTimedToggle: toggleTimed });   // the note game has its own stopwatch button in the score bar
+  else if(canRunChords(spec)) player = createChordPlayer(host, spec, options);
+  showMidi();
+}
 if(!game){ $('plMissing').hidden = false; }
 else {
   document.title = game.title + ' — ChordRush';
   $('plTitle').textContent = game.title;
   $('plBlurb').textContent = game.blurb;
-  const host = $('exHost'), spec = game.spec;
-  if(spec.pool.kind === 'note') player = createNotePlayer(host, spec);
-  else if(canRunChords(spec)) player = createChordPlayer(host, spec);
-  if(player){
-    let midiText = 'Connecting to MIDI…';
-    const show = () => document.querySelectorAll('.ex-midi').forEach(el => { el.textContent = midiText; });
-    show();
-    connectMidi({
-      onNoteOn: (key, t) => player.keyDown(key, t),
-      onNoteOff: (key, t) => player.keyUp(key, t),
-      onStatus: text => { midiText = text; show(); },
-    });
-    document.addEventListener('keydown', e => {
-      if(!(e.code === 'Space' || e.key === ' ') || e.repeat) return;
-      const t = e.target, tag = t && t.tagName;
-      if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
-      e.preventDefault();                       // also stops a focused button from being "clicked" by the space
-      player.restart();
-    });
-  }
+  settings = loadSettings();
+  $('plSet').hidden = false; $('plTimed').hidden = game.spec.pool.kind === 'note'; drawSettings(); mountGame();
+  $('plReps').addEventListener('click', e => { const b = e.target.closest('[data-reps]'); if(!b) return; settings.reps = +b.dataset.reps; settingsChanged(); });
+  $('plTimed').addEventListener('click', toggleTimed);
+  connectMidi({
+    onNoteOn: (key, t) => { if(player) player.keyDown(key, t); },
+    onNoteOff: (key, t) => { if(player) player.keyUp(key, t); },
+    onStatus: text => { midiText = text; showMidi(); },
+  });
+  document.addEventListener('keydown', e => {
+    if(!player || !(e.code === 'Space' || e.key === ' ') || e.repeat) return;
+    const t = e.target, tag = t && t.tagName;
+    if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    e.preventDefault();                                 // also stops a focused button from being "clicked" by the space
+    player.restart();
+  });
 }
 (async () => { const { data:{ session } } = await supabase.auth.getSession(); renderNav(session); })();
 </script>

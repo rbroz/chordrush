@@ -8,6 +8,7 @@
 //   - every key you strike counts as one attempt. The right key is a hit; any other key is a miss.
 //   - after a hit you get a new note (never the same key twice in a row). After a miss the SAME note stays until you find it.
 //   - accuracy = hits / attempts, rounded to a whole percent.
+//   - the game is over after `reps` hits (default 20; Infinity = never). The clock starts at your first key and stops at the last hit.
 import { noteChoices, CHORD_TYPES, ROOT_NAMES } from './exercise-spec.js';
 
 // A raw MIDI message is [status, key, velocity]. Only a "note on" with velocity above 0 is a key strike
@@ -32,25 +33,36 @@ export const keyName = key => KEY_NAMES[((key % 12) + 12) % 12] + (Math.floor(ke
 
 export const isRestartKey = e => !!e && (e.code === 'Space' || e.key === ' ');
 
-export function createNoteRunner(spec, rng = Math.random) {
+export function createNoteRunner(spec, rng = Math.random, options = {}) {
   if (!spec || !spec.pool || spec.pool.kind !== 'note') throw new Error('createNoteRunner needs a note exercise');
   const choices = noteChoices();
-  let target = null, right = 0, attempts = 0, last = null, lastKey = null;   // last = 'right' | 'miss' | null (nothing played yet)
+  const reps = options.reps === undefined ? 20 : options.reps;
+  let target = null, right = 0, attempts = 0, last = null, lastKey = null, startT = null, endT = null, done = false;   // last = 'right' | 'miss' | null (nothing played yet)
 
   // a random note, but never the same key as `avoid` (so you can't just hit the same key twice)
   function pick(avoid) {
     const pool = avoid == null ? choices : choices.filter(n => n.midi !== avoid);
     return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
   }
-  const snapshot = () => ({ target, right, attempts, last, lastKey, accuracy: attempts ? Math.round(100 * right / attempts) : null });
+  const snapshot = (now = 0) => ({
+    target, right, attempts, last, lastKey, reps, done,
+    accuracy: attempts ? Math.round(100 * right / attempts) : null,
+    elapsedMs: startT === null ? 0 : done ? endT - startT : Math.max(0, now - startT),
+    totalMs: done ? endT - startT : null,
+  });
 
-  function restart() { right = 0; attempts = 0; last = null; lastKey = null; target = pick(null); return snapshot(); }
-  function press(key) {
-    if (!Number.isInteger(key)) return snapshot();
+  function restart() { right = 0; attempts = 0; last = null; lastKey = null; startT = null; endT = null; done = false; target = pick(null); return snapshot(); }
+  // `t` is when the key was struck, in milliseconds (the clock only matters if the page shows a timer)
+  function press(key, t = 0) {
+    if (done || !Number.isInteger(key)) return snapshot(t);
+    if (startT === null) startT = t;
     attempts++; lastKey = key;
-    if (key === target.midi) { right++; last = 'right'; target = pick(target.midi); }
-    else last = 'miss';
-    return snapshot();
+    if (key === target.midi) {
+      right++; last = 'right';
+      if (right >= reps) { done = true; endT = t; target = null; }
+      else target = pick(target.midi);
+    } else last = 'miss';
+    return snapshot(t);
   }
 
   restart();
@@ -83,24 +95,32 @@ export function chordFor(rootPc, type, inv, anyVoicing) {
 }
 const shuffle = (arr, rng) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-// the chords of one run: the chosen type on all 12 roots, in the chosen voicing, shuffled
-export function buildChordOrder(spec, rng = Math.random) {
+// the chords of one run: `reps` chords drawn from the chosen type on all 12 roots, in the chosen voicing.
+// Each pass through the 12 roots is shuffled, so every root comes up equally often; two in a row are never the same chord.
+export function buildChordOrder(spec, rng = Math.random, reps = 12) {
   const { type, voicing } = spec.pool;
   const list = [];
   for (let pc = 0; pc < 12; pc++) list.push(voicing === 'any' ? chordFor(pc, type, 0, true) : chordFor(pc, type, INV_INDEX[voicing], false));
-  return shuffle(list, rng);
+  const out = [];
+  while (out.length < reps) {
+    const bag = shuffle(list, rng);
+    if (out.length && bag[0].rootPc === out[out.length - 1].rootPc) [bag[0], bag[1]] = [bag[1], bag[0]];   // no repeat across two passes
+    for (const c of bag) if (out.length < reps) out.push(c);
+  }
+  return out;
 }
 
 // which specs this runner can play: chords, the exact chord, scored on time (+ accuracy)
 export const canRunChords = spec => !!spec && !!spec.pool && spec.pool.kind === 'chords' && spec.accept === 'exact' && spec.scoring === 'time';
 
 // Every method returns a list of events, in order: 'miss', 'advance' (a chord landed), 'start' (the first chord, the go-signal), 'done'.
-export function createChordRunner(spec, rng = Math.random) {
+export function createChordRunner(spec, rng = Math.random, options = {}) {
   if (!canRunChords(spec)) throw new Error('createChordRunner needs a chords exercise scored on time');
+  const reps = Math.max(2, options.reps === undefined ? 12 : options.reps);   // the first chord is the go-signal, so a run needs at least two
   let order, idx, phase, held, deadline, startT, completions, missesAt, wrong, curMisses;
 
   function restart() {
-    order = buildChordOrder(spec, rng); idx = 0; phase = 'ready'; deadline = null; startT = 0;
+    order = buildChordOrder(spec, rng, reps); idx = 0; phase = 'ready'; deadline = null; startT = 0;
     completions = []; missesAt = []; wrong = 0; curMisses = 0;
     if (!held) held = new Set();   // keys still down across a restart stay down
     return [];

@@ -21,7 +21,7 @@
 .cp-inv { display: block; margin-top: 8px; font-size: 14px; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .cp-hint svg { display: block; max-width: 100%; height: auto; }
 .cp-label { margin-top: 22px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.cp-done { padding: 26px 18px 8px; text-align: center; }
+.cp-done, .np-done { padding: 26px 18px 8px; text-align: center; }
 .cp-total { font-size: 44px; font-weight: 700; color: var(--text); }
 .cp-total span { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
 .cp-splits { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 22px auto 6px; max-width: 640px; text-align: left; }
@@ -31,3 +31,12 @@
 .cp-split.slow span:last-child { color: #d97706; }
 .cp-split.miss { border-color: rgba(239,68,68,.45); }
 .cp-again { margin: 16px 0 6px; font-size: 12px; color: var(--muted); }
+.np-hint { margin: 0; padding: 4px 18px 8px; text-align: center; font-size: 12px; color: var(--muted); }
+.np-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }   /* the clock sits right beside the stopwatch, at the right edge */
+.np-timer-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--muted); cursor: pointer; transition: color .12s, border-color .12s; }
+.np-timer-btn svg { width: 19px; height: 19px; }
+.np-timer-btn:hover { color: var(--text); }
+.np-timer-btn.active, .np-timer-btn.active:hover { color: var(--accent); border-color: var(--accent); }
+.np-foot { justify-content: center; }
+.np-foot span:empty { display: none; }
+
