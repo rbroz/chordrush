@@ -59,7 +59,7 @@ export function createNotePlayer(host, spec, options = {}) {
     q('.np-acc').textContent = s.accuracy === null ? '—' : s.accuracy + '%';
     q('.np-time').textContent = fmt(s.elapsedMs);
     q('.ex-stage').hidden = s.done; q('.np-done').hidden = !s.done;
-    if (s.done) drawDone(s); else q('.ex-stage').innerHTML = renderStaff(s.target);
+    if (s.done) drawDone(s); else q('.ex-stage').innerHTML = renderStaff(s.target, spec.pool.clef);
     q('.np-played').textContent = s.lastKey === null ? '' : 'You played ' + keyName(s.lastKey) + (s.last === 'right' ? ' ✓' : ' ✗');
     if (result) flash(result);
   }

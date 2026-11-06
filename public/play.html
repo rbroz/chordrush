@@ -59,6 +59,7 @@
       <p class="pl-blurb" id="plBlurb"></p>
       <div class="pl-set" id="plSet" hidden>
         <div class="pl-set-group"><span class="fg-label">Reps</span><div class="filterbar" id="plReps"></div></div>
+        <div class="pl-set-group" id="plClefGroup" hidden><span class="fg-label">Clef</span><div class="filterbar" id="plClef"></div></div>
         <button type="button" class="filter pl-timed" id="plTimed" aria-pressed="false"></button>
       </div>
       <div id="exHost"></div>
@@ -86,6 +87,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GAMES } from '/games.js';
 import { canRunChords } from '/exercise-runner.js';
 import { createNotePlayer, createChordPlayer } from '/players.js';
+import { noteSpec } from '/exercise-spec.js';
 import { connectMidi } from '/midi-input.js';
 const supabase = createClient(
   'https://pkrvnrgqtuvbtusdncok.supabase.co',
@@ -112,6 +114,7 @@ function renderNav(session){
 // The two settings (timed, reps) are remembered in this browser for each game.
 const game = GAMES.find(g => g.id === new URLSearchParams(location.search).get('game'));
 let player = null, settings = null;
+const hasClef = !!game && game.spec.pool.kind === 'note';   // only the note game has a clef
 const storeKey = () => 'chordrush:game:' + game.id;
 function loadSettings(){
   const s = { ...game.defaults };
@@ -119,12 +122,14 @@ function loadSettings(){
     const saved = JSON.parse(localStorage.getItem(storeKey()) || 'null');
     if(saved && typeof saved.timed === 'boolean') s.timed = saved.timed;
     if(saved && game.repOptions.includes(saved.reps)) s.reps = saved.reps;
+    if(saved && (saved.clef === 'treble' || saved.clef === 'bass')) s.clef = saved.clef;
   } catch(e) {}
   return s;
 }
 function saveSettings(){ try { localStorage.setItem(storeKey(), JSON.stringify(settings)); } catch(e) {} }
 function drawSettings(){
   $('plReps').innerHTML = game.repOptions.map(n => '<button type="button" class="filter' + (n === settings.reps ? ' active' : '') + '" data-reps="' + n + '">' + n + '</button>').join('');
+  if(hasClef) $('plClef').innerHTML = ['treble', 'bass'].map(c => '<button type="button" class="filter' + (c === settings.clef ? ' active' : '') + '" data-clef="' + c + '">' + c + '</button>').join('');
   const b = $('plTimed'); b.classList.toggle('active', settings.timed); b.setAttribute('aria-pressed', String(settings.timed)); b.textContent = 'timed ' + (settings.timed ? 'on' : 'off');
 }
 let midiText = 'Connecting to MIDI…';
@@ -138,7 +143,7 @@ function toggleTimed(){
 function settingsChanged(){ saveSettings(); drawSettings(); mountGame(); document.activeElement && document.activeElement.blur(); }   // blur so the space bar restarts instead of re-pressing a button
 function mountGame(){                                  // (re)build the player with the current settings: a fresh game
   if(player){ player.destroy(); player = null; }
-  const host = $('exHost'), spec = game.spec, options = { reps: settings.reps, timed: settings.timed };
+  const host = $('exHost'), spec = hasClef ? noteSpec(settings.clef) : game.spec, options = { reps: settings.reps, timed: settings.timed };
   if(spec.pool.kind === 'note') player = createNotePlayer(host, spec, { ...options, onTimedToggle: toggleTimed });   // the note game has its own stopwatch button in the score bar
   else if(canRunChords(spec)) player = createChordPlayer(host, spec, options);
   showMidi();
@@ -149,7 +154,8 @@ else {
   $('plTitle').textContent = game.title;
   $('plBlurb').textContent = game.blurb;
   settings = loadSettings();
-  $('plSet').hidden = false; $('plTimed').hidden = game.spec.pool.kind === 'note'; drawSettings(); mountGame();
+  $('plSet').hidden = false; $('plTimed').hidden = game.spec.pool.kind === 'note'; $('plClefGroup').hidden = !hasClef; drawSettings(); mountGame();
+  $('plClef').addEventListener('click', e => { const b = e.target.closest('[data-clef]'); if(!b || b.dataset.clef === settings.clef) return; settings.clef = b.dataset.clef; settingsChanged(); });   // new clef = new notes = a fresh game
   $('plReps').addEventListener('click', e => { const b = e.target.closest('[data-reps]'); if(!b) return; settings.reps = +b.dataset.reps; settingsChanged(); });
   $('plTimed').addEventListener('click', toggleTimed);
   connectMidi({

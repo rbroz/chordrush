@@ -126,6 +126,22 @@ ok(r.state().reps === 20, 'default is 20 reps');
 r = createNoteRunner(spec, seeded(11), { reps: 1 });
 ok(r.press(r.state().target.midi, 5).done, 'reps 1: one hit and it is over');
 
+// 10d. the bass clef: a bass game only asks bass notes, and a treble game never does
+{
+  const bassSpec = { ...spec, pool: { kind: 'note', clef: 'bass' } };
+  const br = createNoteRunner(bassSpec, seeded(21), { reps: Infinity });
+  const bassAll = noteChoices('bass'), seenBass = new Set(); let outside = 0;
+  for (let i = 0; i < 6000; i++) { const tg = br.state().target; seenBass.add(tg.name); if (tg.midi < 36 || tg.midi > 64) outside++; br.press(tg.midi); }
+  ok(outside === 0, 'a bass game never asks a note outside C2..E4');
+  ok(seenBass.size === bassAll.length && bassAll.length === 41, 'every one of the 41 bass notes comes up (saw ' + seenBass.size + ')');
+  const tr2 = createNoteRunner(spec, seeded(22), { reps: Infinity }); let trOutside = 0;
+  for (let i = 0; i < 3000; i++) { const tg = tr2.state().target; if (tg.midi < 57 || tg.midi > 84) trOutside++; tr2.press(tg.midi); }
+  ok(trOutside === 0, 'a treble game never asks a bass note');
+  const b2 = createNoteRunner(bassSpec, seeded(23)); const t0 = b2.state().target;
+  ok(b2.press(t0.midi + 12).last === 'miss' && b2.press(t0.midi).last === 'right', 'bass notes are judged on the exact key too (octave counts)');
+  let rr = 0, nn = 0; const b3 = createNoteRunner(bassSpec, seeded(24)); while (!b3.state().done && nn < 500) { b3.press(b3.state().target.midi, nn * 10); nn++; } ok(nn === 20 && b3.state().done, 'a bass game also ends after 20 reps');
+}
+
 // 11. it only runs note exercises
 for (const e of EXAMPLES) { let threw = false; try { createNoteRunner(e.spec); } catch { threw = true; } ok(threw, 'rejects the ' + e.id + ' exercise'); }
 { let threw = false; try { createNoteRunner(null); } catch { threw = true; } ok(threw, 'rejects null'); }

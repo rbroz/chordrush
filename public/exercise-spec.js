@@ -45,24 +45,29 @@ const ALL_KEYS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 /* ---------- the note pool: single notes on the treble staff, A3 (two ledger lines below) to C6 (two above) ---------- */
 // A note is a SPELLING (letter + accidental + octave), because a MIDI key can't tell C♯ from D♭. You play it on the keyboard,
 // so either spelling of a black key is answered by the same key. E♯, B♯, C♭ and F♭ are left out (they'd be trick questions on a keyboard).
-export const NOTE_MIN = 57;   // A3
-export const NOTE_MAX = 84;   // C6
+export const NOTE_MIN = 57;   // A3, the lowest treble note
+export const NOTE_MAX = 84;   // C6, the highest treble note
+// the clefs: each shows its staff plus two ledger lines above and below.
+// treble: staff E4..F5, notes A3..C6.  bass: staff G2..A3, notes C2..E4 (MIDI 36..64).
+export const CLEFS = ['treble', 'bass'];
+export const NOTE_RANGES = { treble: { min: 57, max: 84, label: 'A3–C6' }, bass: { min: 36, max: 64, label: 'C2–E4' } };
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'], LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
 const SHARPABLE = ['C', 'D', 'F', 'G', 'A'], FLATTABLE = ['D', 'E', 'G', 'A', 'B'];   // letters that have a black key above / below them
 // every note the pool can ask for (naturals, sharps and flats, no options): { midi, letter, acc (-1, 0, +1), octave, step (staff position: C4 = 28), name }
-export function noteChoices() {
+export function noteChoices(clef = 'treble') {
+  const range = NOTE_RANGES[clef] || NOTE_RANGES.treble;
   const out = [];
-  for (let octave = 3; octave <= 6; octave++) LETTERS.forEach((letter, i) => {
+  for (let octave = 1; octave <= 6; octave++) LETTERS.forEach((letter, i) => {
     for (const acc of [-1, 0, 1]) {
       if (acc === 0 ? false : acc > 0 ? !SHARPABLE.includes(letter) : !FLATTABLE.includes(letter)) continue;
       const midi = 12 * (octave + 1) + LETTER_PC[i] + acc;
-      if (midi < NOTE_MIN || midi > NOTE_MAX) continue;
+      if (midi < range.min || midi > range.max) continue;
       out.push({ midi, letter, acc, octave, step: octave * 7 + i, name: letter + (acc > 0 ? '♯' : acc < 0 ? '♭' : '') + octave });
     }
   });
   return out;
 }
-export const noteRangeLabel = () => 'A3–C6';
+export const noteRangeLabel = (clef = 'treble') => (NOTE_RANGES[clef] || NOTE_RANGES.treble).label;
 
 const clone = x => JSON.parse(JSON.stringify(x));
 const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -90,7 +95,7 @@ export const EXAMPLES = [
 
 export const defaultSpec = () => clone(EXAMPLES[0].spec);
 // the one exercise the editor page makes right now: single notes on the treble staff (A3 to C6, naturals, sharps and flats)
-export const noteSpec = () => ({ v: SPEC_VERSION, pool: { kind: 'note' }, prompt: { show: 'staff', hint: false }, accept: 'exact', scoring: 'accuracy' });
+export const noteSpec = (clef = 'treble') => ({ v: SPEC_VERSION, pool: clef === 'treble' ? { kind: 'note' } : { kind: 'note', clef }, prompt: { show: 'staff', hint: false }, accept: 'exact', scoring: 'accuracy' });
 export const isBlankSpec = s => s == null || (isObj(s) && Object.keys(s).length === 0);
 
 /* ---------- validation: returns a list of problems (empty = valid) ---------- */
@@ -121,7 +126,8 @@ export function validateSpec(s) {
     if (!(Array.isArray(p.steps) && p.steps.length >= 2 && p.steps.length <= 8 && p.steps.every(n => NUMERALS.includes(n)))) errs.push('pool: a progression needs 2 to 8 roman numerals');
     if (!validKeys(p.keys)) errs.push('pool: pick at least one key');
   } else if (p.kind === 'note') {
-    onlyKeys(p, ['kind'], 'pool', errs);   // nothing to configure: every note from A3 to C6, naturals, sharps and flats
+    onlyKeys(p, ['kind', 'clef'], 'pool', errs);   // every note in the clef's range, naturals, sharps and flats; clef is optional (treble)
+    if (p.clef !== undefined && !CLEFS.includes(p.clef)) errs.push('pool: unknown clef');
   } else errs.push('pool: unknown kind');
 
   const pr = s.prompt;
@@ -205,7 +211,7 @@ export function describeSpec(s) {
   if (isBlankSpec(s)) return 'blank';
   if (validateSpec(s).length) return 'needs attention';
   const p = s.pool;
-  if (p.kind === 'note') return 'treble · ' + noteRangeLabel() + ' · all notes · accuracy';
+  if (p.kind === 'note') { const c = p.clef || 'treble'; return c + ' · ' + noteRangeLabel(c) + ' · all notes · accuracy'; }
   let pool;
   if (p.kind === 'chords') {
     pool = CHORD_TYPES[p.type].label + ' · ' + (p.voicing === 'any' ? 'any voicing' : p.voicing === 'root' ? 'root' : p.voicing + ' inv');

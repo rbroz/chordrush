@@ -35,7 +35,7 @@ export const isRestartKey = e => !!e && (e.code === 'Space' || e.key === ' ');
 
 export function createNoteRunner(spec, rng = Math.random, options = {}) {
   if (!spec || !spec.pool || spec.pool.kind !== 'note') throw new Error('createNoteRunner needs a note exercise');
-  const choices = noteChoices();
+  const choices = noteChoices(spec.pool.clef);   // treble unless the spec says bass
   const reps = options.reps === undefined ? 20 : options.reps;
   let target = null, right = 0, attempts = 0, last = null, lastKey = null, startT = null, endT = null, done = false;   // last = 'right' | 'miss' | null (nothing played yet)
 

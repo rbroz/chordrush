@@ -45,7 +45,27 @@ ok(describeSpec(noteSpec()) === 'treble · A3–C6 · all notes · accuracy', 'n
 const badNote = (name, mut) => { const s = noteSpec(); mut(s); ok(validateSpec(s).length > 0, 'should reject: ' + name); };
 badNote('any pool option (the note pool has none)', s => { s.pool.accidentals = 'all'; });
 badNote('old low/high fields', s => { s.pool.low = 60; });
-badNote('unknown note-pool field', s => { s.pool.clef = 'bass'; });
+badNote('unknown note-pool field', s => { s.pool.octave = 4; });
+badNote('unknown clef', s => { s.pool.clef = 'alto'; });
+badNote('clef of the wrong type', s => { s.pool.clef = 1; });
+ok(validateSpec(S.noteSpec('bass')).length === 0 && validateSpec(S.noteSpec('treble')).length === 0, 'bass and treble note specs are valid');
+ok(S.noteSpec().pool.clef === undefined && S.noteSpec('bass').pool.clef === 'bass', 'treble is the default and needs no clef field; bass sets it');
+{ // the bass clef: C2..E4, with the same shape as treble (staff + two ledger lines above and below)
+  const bass = S.noteChoices('bass'), tn = bass.map(n => n.name);
+  ok(bass.length === 17 + 12 + 12, 'bass has 17 white keys + 12 sharps + 12 flats = 41, got ' + bass.length);
+  ok(bass.every(n => n.midi >= 36 && n.midi <= 64), 'every bass note inside C2..E4');
+  ok(['C2', 'E4', 'D♯4', 'E♭4', 'D♭2', 'G3', 'A3', 'B3', 'C4'].every(x => tn.includes(x)), 'bass edges and the notes around the staff are there');
+  ok(['B1', 'F4', 'F♯4', 'C♭2', 'E♯4', 'B♯3', 'A♭1'].every(x => !tn.includes(x)), 'nothing outside C2..E4, and no E♯ B♯ C♭ F♭');
+  ok(new Set(tn).size === bass.length, 'no duplicate bass spellings');
+  const by = n => bass.find(x => x.name === n);
+  ok(by('C2').midi === 36 && by('C2').step === 14 && by('G2').step === 18 && by('A3').step === 26 && by('E4').step === 30 && by('E4').midi === 64, 'bass staff steps: G2 is the bottom line (18), A3 the top (26), C2 and E4 sit on the 2nd ledger lines (14, 30)');
+  ok(by('C♯3').midi === by('D♭3').midi && by('C♯3').step !== by('D♭3').step, 'C♯3 and D♭3 are one key on different lines');
+  ok(Math.min(...bass.map(n => n.step)) === 14 && Math.max(...bass.map(n => n.step)) === 30, 'bass spans exactly two ledger lines below and above the staff');
+  const tr = S.noteChoices('treble');
+  ok(Math.min(...tr.map(n => n.step)) === 26 && Math.max(...tr.map(n => n.step)) === 42, 'treble still spans A3..C6 (steps 26..42)');
+  ok(S.noteChoices().map(n => n.name).join() === tr.map(n => n.name).join(), 'no argument means treble');
+  ok(describeSpec(S.noteSpec('bass')) === 'bass · C2–E4 · all notes · accuracy' && describeSpec(S.noteSpec()) === 'treble · A3–C6 · all notes · accuracy', 'descriptions name the clef');
+}
 badNote('note with chord-name prompt', s => { s.prompt = { show: 'name', hint: false }; });
 badNote('note with hint', s => { s.prompt.hint = true; });
 badNote('note with triad_or_seventh', s => { s.accept = 'triad_or_seventh'; });

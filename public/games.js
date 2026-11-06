@@ -9,7 +9,7 @@ export const GAMES = [
     spec: EXAMPLES.find(x => x.id === 'chords').spec,
     defaults: { timed: true, reps: 12 }, repOptions: [12, 24, 48, 96] },
   { id: 'notes', title: 'Note recognition',
-    blurb: 'A note on the treble staff, naturals, sharps and flats. Find it on your keyboard.',
+    blurb: 'A note on the staff, treble or bass, naturals, sharps and flats. Find it on your keyboard.',
     spec: noteSpec(),
-    defaults: { timed: false, reps: 20 }, repOptions: [10, 20, 50, 100] },
+    defaults: { timed: false, reps: 20, clef: 'treble' }, repOptions: [10, 20, 50, 100] },
 ];
